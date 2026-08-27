@@ -1,0 +1,34 @@
+# 临时与可再生资源
+__pycache__/
+*.pyc
+
+# 研究阶段下载的参考图片（可由 reference/fetch_*.cjs 脚本再生）
+reference/prts/
+reference/community/
+reference/endfield/
+reference/endfield2/
+reference/ak_pairs/
+reference/xhs/
+reference/xhs_note.html
+
+# 凭据与密钥（守则 §10：.gitignore 不是隐私机制，仅防误提交）
+.env*
+*.key
+*.pem
+*.p12
+
+# 系统文件
+Thumbs.db
+.DS_Store
+*.log
+
+# 本地资产与过程产物（留存本地、不入库；推送范围决策 D5/D7/D8/D9/D15）
+input_small.png
+tmp_designs/
+engine/design_*.json
+engine/output/
+output/
+reference/yt_01_conv.jpg
+reference/game8_medal_text.txt
+reference/note_medal_text.txt
+reference/prts_glorious_path.wikitext.txt
