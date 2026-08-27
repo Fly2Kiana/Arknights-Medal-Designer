@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest an improvement to the generator, web tool, or agent skill
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Feature requests should stay within the project boundary: a local, player-made, non-commercial tool that does not reproduce official assets verbatim.
+  - type: textarea
+    id: idea
+    attributes:
+      label: Proposal
+      description: What should be added or changed, and why
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Use case, example input type (photo / icon / logo), or expected output style
+    validations:
+      required: false

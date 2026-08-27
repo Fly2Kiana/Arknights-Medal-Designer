@@ -1,0 +1,26 @@
+# NOTICE
+
+This project is an independent, player-made tool. It is not affiliated with,
+endorsed by, or sponsored by Hypergryph, the publisher of Arknights, or by any
+third party listed below.
+
+## Design research references
+
+The medal design language is derived from public community sources, which were
+consulted for research only. No third-party assets are distributed in this
+repository (downloaded study material is gitignored and can be regenerated with
+the fetch scripts under `reference/`):
+
+- PRTS Wiki (prts.wiki) — Arknights community wiki; text referenced for research in `reference/DESIGN_SPEC.md`
+- 明日方舟：终末地 BWIKI (wiki.biligame.com/zmd) — community wiki
+- Game8 (game8.jp) — public article text referenced in `reference/DESIGN_SPEC.md`
+- note.com — public article text referenced in `reference/DESIGN_SPEC.md`
+- Bilibili (bilibili.com) — public community video titles referenced in `reference/DESIGN_SPEC.md`
+- Picsum Photos (picsum.photos) — Unsplash-based placeholder photos used as the `real_photos/` stress-test set
+
+## Trademarks
+
+Arknights, Arknights: Endfield, and related names and materials belong to their
+respective owners. They are referenced for descriptive purposes only.
+
+The repository's own code and documentation are governed by [LICENSE](LICENSE).

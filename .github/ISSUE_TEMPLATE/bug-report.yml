@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a problem with the generator, web tool, or agent skill
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not include personal photos, credentials, private paths, or session content. Prefer the bundled `samples/` images when reproducing.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, numpy/Pillow versions
+      placeholder: Windows 11, Python 3.12, numpy 2.x, Pillow 11.x
+    validations:
+      required: true
+  - type: input
+    id: entrypoint
+    attributes:
+      label: Entry point
+      description: CLI / web tool / agent skill
+      placeholder: CLI
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Command or reproduction steps
+      description: Exact command line or step-by-step reproduction
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected vs. actual
+      description: What you expected and what happened instead
+    validations:
+      required: true
