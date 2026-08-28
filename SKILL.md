@@ -61,6 +61,9 @@ python "<skill目录>/engine/badge_engine.py" "<输入照片路径>" -o "<输出
 
 无视觉能力且无可用子模型时降级：`--mode icon`（强分面+形态学清洗，图案感弱于主路径）。
 
+**无视觉能力的 agent 环境**：可用 `engine/design_emblem.py` 走 OpenAI 兼容视觉 API 自动出设计稿
+（`OPENAI_API_KEY` 必填，`OPENAI_BASE_URL`/`OPENAI_MODEL`/`OPENAI_MAX_TOKENS` 可选，`--render` 直接出图），再按本工作流质检。
+
 ## 质检要求（必须）
 
 出图后**不要直接交付**：按本目录 `PROMPTS.md` §三 的五大类质检清单（章体结构/主体纹章/文字/图层冲突/质感）逐项自检——
