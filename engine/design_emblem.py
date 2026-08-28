@@ -11,6 +11,7 @@ design_emblem.py · OpenAI 兼容视觉 API 适配器
     OPENAI_BASE_URL   可选，默认 https://api.openai.com/v1
                       （任何 OpenAI 兼容端点均可，如本地/中转服务）
     OPENAI_MODEL      可选，默认 gpt-4o-mini（需支持图片输入）
+    OPENAI_MAX_TOKENS 可选，默认 1024（GLM-4V-Flash 上限；其它端点可调大，如 4000）
 
 用法：
     $env:OPENAI_API_KEY='...'
@@ -92,12 +93,12 @@ def extract_json(text):
         raise
 
 
-def call_vision(data_uri, api_key, base_url, model, timeout=180):
+def call_vision(data_uri, api_key, base_url, model, timeout=180, max_tokens=1024):
     """调用 OpenAI 兼容 chat/completions（图片 data URI），返回设计稿 dict"""
     url = base_url.rstrip("/") + "/chat/completions"
     payload = {
         "model": model,
-        "max_tokens": 4000,
+        "max_tokens": max_tokens,
         "temperature": 0.6,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -120,7 +121,12 @@ def call_vision(data_uri, api_key, base_url, model, timeout=180):
         detail = e.read().decode("utf-8", errors="replace")[:500]
         raise SystemExit(f"[error] API 返回 HTTP {e.code}: {detail}")
     content = resp["choices"][0]["message"]["content"]
-    design = extract_json(content)
+    try:
+        design = extract_json(content)
+    except json.JSONDecodeError:
+        raise SystemExit(
+            "[error] 模型回复无法解析为 JSON（可能因输出被 max_tokens 截断）。\n"
+            "端点允许时可尝试 --max-tokens 调大后重试。回复片段：\n" + content[:300])
     if not isinstance(design.get("shapes"), list) or not design["shapes"]:
         raise SystemExit("[error] 模型回复不含有效 shapes 列表，请重试或换模型")
     return design
@@ -134,6 +140,9 @@ def main():
     ap.add_argument("--model", default=os.environ.get("OPENAI_MODEL", DEFAULT_MODEL))
     ap.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL", DEFAULT_BASE_URL))
     ap.add_argument("--timeout", type=float, default=180)
+    ap.add_argument("--max-tokens", type=int,
+                    default=int(os.environ.get("OPENAI_MAX_TOKENS", "1024")),
+                    help="回复最大 token 数（GLM-4V-Flash 上限 1024；其它端点可调大）")
     # 渲染参数（与 badge_engine 对齐，仅 --render 时使用）
     ap.add_argument("--style", default="arknights", choices=["arknights", "endfield", "candy"])
     ap.add_argument("--tone", default=None)
@@ -159,7 +168,8 @@ def main():
             "请先执行 $env:OPENAI_API_KEY='真实密钥' 后重试。")
 
     data_uri = image_to_data_uri(args.input)
-    design = call_vision(data_uri, api_key, args.base_url, args.model, args.timeout)
+    design = call_vision(data_uri, api_key, args.base_url, args.model, args.timeout,
+                         args.max_tokens)
 
     out = args.output or (os.path.splitext(os.path.basename(args.input))[0] + "_design.json")
     with open(out, "w", encoding="utf-8") as f:
