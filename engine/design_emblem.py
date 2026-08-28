@@ -44,7 +44,7 @@ SYSTEM_PROMPT = (
     "3. 三档硬明度 0.22 / 0.55 / 0.88；粗轮廓（宽 14~22）配细内部线（宽 6~10）；\n"
     "4. 若照片与游戏相关（如明日方舟角色），先做游戏关联分析：识别角色/物件，"
     "提取其标志性符号为母题，不得输出与游戏无关的泛化图形；\n"
-    "5. 坐标 0..1000，每设计 18~40 个图元；装饰原语优先（bezier/laurel/sunburst/star/banner）。\n"
+    "5. 坐标 0..1000，每设计 12~20 个图元（输出 token 有限：务必完整输出全部图元与字段，宁可略少也不可截断或省略结尾）；装饰原语优先（bezier/laurel/sunburst/star/banner）。\n"
     "输出要求：仅输出一行严格 JSON，格式 {\"shapes\":[...]}；图元类型限定为 "
     "poly/circle/line/arc/rect/bezier/star/sunburst/laurel/banner；"
     "poly 用 {\"t\":\"poly\",\"pts\":[[x,y],...],\"fill\":0.55,\"stroke\":0.22,\"w\":10}，"
@@ -57,7 +57,8 @@ SYSTEM_PROMPT = (
     "sunburst 用 {\"t\":\"sunburst\",\"cx\":500,\"cy\":500,\"r0\":40,\"r1\":200,\"count\":16,...}，"
     "laurel 用 {\"t\":\"laurel\",\"cx\":500,\"cy\":500,\"length\":240,\"angle\":30,\"branches\":9,...}，"
     "banner 用 {\"t\":\"banner\",\"x0\":0,\"y0\":0,\"x1\":0,\"y1\":0,\"fold\":26,...}。"
-    "不要输出任何解释、markdown 或代码围栏。"
+    "不要输出任何解释、markdown 或代码围栏；必须输出完整闭合、可被 JSON 解析的一行对象，"
+    "若空间不足请减少图元数量，而不是省略字段或结尾。"
 )
 
 
