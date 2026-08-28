@@ -121,6 +121,8 @@ python engine/badge_engine.py <输入> -o <输出.png>
 - 无视觉环境 API 适配：`python engine/design_emblem.py <照片> -o design.json [--render out.png --style ...]`
   （环境变量 `OPENAI_API_KEY` 必填；`OPENAI_BASE_URL`/`OPENAI_MODEL` 可选）
   （GLM 类端点注意：默认 `--max-tokens 1024`；其它端点可用 `--max-tokens` 调大）
+  （模型选择实测经验：Flash/低价档输出图元少、易照搬 few-shot 示例，仅适合链路自检；
+    正式出图建议指令跟随强的视觉模型，如 Qwen2.5-VL-72B / GPT-4o / Gemini Pro）
 
 ---
 
