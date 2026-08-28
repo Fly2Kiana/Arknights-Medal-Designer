@@ -145,12 +145,18 @@ def main():
     ap.add_argument("--carve", default="machine", choices=["machine", "hand"])
     args = ap.parse_args()
 
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise SystemExit(
             "[error] 未设置 OPENAI_API_KEY。请先执行：\n"
             "  $env:OPENAI_API_KEY='你的密钥'\n"
             "（可选：$env:OPENAI_BASE_URL / $env:OPENAI_MODEL 覆盖默认端点与模型）")
+    try:
+        api_key.encode("ascii")
+    except UnicodeEncodeError:
+        raise SystemExit(
+            "[error] OPENAI_API_KEY 含非 ASCII 字符（可能仍是占位文本，未替换为真实密钥）。\n"
+            "请先执行 $env:OPENAI_API_KEY='真实密钥' 后重试。")
 
     data_uri = image_to_data_uri(args.input)
     design = call_vision(data_uri, api_key, args.base_url, args.model, args.timeout)
