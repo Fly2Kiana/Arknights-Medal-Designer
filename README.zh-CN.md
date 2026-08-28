@@ -21,6 +21,7 @@
 | `SKILL.md` | Agent skill 定义（对话内直接出图） |
 | `engine/badge_engine.py` | 核心引擎：主体提取 → XDoG 蚀刻 → 章体合成（numpy + Pillow） |
 | `engine/emblem_render.py` | 把 AI 设计的几何图元 JSON 渲染上章面 |
+| `engine/design_emblem.py` | OpenAI 兼容视觉 API 适配器：照片 → 设计稿 JSON（给无视觉能力的 agent 环境） |
 | `engine/batch_test.py` / `engine/gen_designs.py` | 真实照片压测工装 / 程序化纹章设计稿生成器 |
 | `web/index.html` | 单文件网页工具（拖拽/调参/下载）——当前为早期模板版本，新版模板（终末地重做 + 糖果风）移植中 |
 | `PROMPTS.md` | 自包含操作手册：设计提示词模板、质检清单、参数速查 |
@@ -167,8 +168,7 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
 计划方向，非发布承诺：
 
 1. 网页工具新版模板移植（终末地重做 + 糖果风）。
-2. `design_emblem.py` —— OpenAI 兼容视觉 API 适配器（给无视觉能力的 agent 环境）。
-3. 字体跨平台兜底（mac/Linux）。
+2. 字体跨平台兜底（mac/Linux）。
 
 ## 更多文档
 

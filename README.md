@@ -21,6 +21,7 @@ Turn any photo into a stylized *Arknights* / *Arknights: Endfield* medal (蚀刻
 | `SKILL.md` | Agent skill definition (chat-in, medal-out workflow) |
 | `engine/badge_engine.py` | Core engine: subject extraction → XDoG etching → medal composition (numpy + Pillow) |
 | `engine/emblem_render.py` | Renders the AI-designed geometric emblem JSON onto the medal face |
+| `engine/design_emblem.py` | OpenAI-compatible vision API adapter: photo → design JSON (for agent environments without built-in vision) |
 | `engine/batch_test.py` / `engine/gen_designs.py` | Real-photo stress-test rig / procedural emblem-design generator |
 | `web/index.html` | Single-file web tool (drag, tune, download) — an early template build; the newer templates (Endfield rework + candy) are being ported |
 | `PROMPTS.md` | Self-contained operator manual: design prompt template, QC checklist, parameter reference |
@@ -168,8 +169,7 @@ Visual acceptance (per `PROMPTS.md` §三): candy ≥ 0.85 / metal ≥ 0.85 / ga
 Planned directions, not release commitments:
 
 1. Web tool newer-template port (Endfield rework + candy).
-2. `design_emblem.py` — OpenAI-compatible vision API adapter for agent environments without built-in vision.
-3. Cross-platform font fallbacks (mac/Linux).
+2. Cross-platform font fallbacks (mac/Linux).
 
 ## More documentation
 

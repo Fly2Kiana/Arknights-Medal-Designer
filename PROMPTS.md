@@ -118,6 +118,8 @@ python engine/badge_engine.py <输入> -o <输出.png>
 - 社区浅银风：`--style arknights --tone silver --mode emblem --polarity dark-on-light`
 - 糖果贴纸风：`--style candy --mode emblem`（默认 lineart→flat 由 tone=candy 自动处理）
 - 批量压测：`python engine/batch_test.py <目录> [--quick] [--tol-sweep]`
+- 无视觉环境 API 适配：`python engine/design_emblem.py <照片> -o design.json [--render out.png --style ...]`
+  （环境变量 `OPENAI_API_KEY` 必填；`OPENAI_BASE_URL`/`OPENAI_MODEL` 可选）
 
 ---
 

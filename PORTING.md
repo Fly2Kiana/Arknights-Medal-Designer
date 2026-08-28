@@ -31,9 +31,9 @@
    - 命令示例改 shell 无关：`PYTHONIOENCODING=utf-8 python3 engine/badge_engine.py ...`（PowerShell/bash 双栏）⏳ 待补
 
 3. **AI 设计路径 API 适配器（关键项）**
-   - 做法 A（零新依赖）：目标 agent 自带视觉 → 按 PROMPTS.md 模板自行读图出设计稿
-   - 做法 B（最稳）：新增 `design_emblem.py` —— 调用任意 OpenAI 兼容视觉 API
-     （base_url/model/key 走环境变量）读图产出设计稿 JSON
+   - 做法 A（零新依赖）：目标 agent 自带视觉 → 按 PROMPTS.md 模板自行读图出设计稿 ✅ 可用
+   - 做法 B：`design_emblem.py` ✅ 已落地（2026-08-27）——调用任意 OpenAI 兼容视觉 API
+     （base_url/model/key 走环境变量）读图产出设计稿 JSON，可 `--render` 直接出图
    - 推荐 A+B 并存
 
 4. **字体跨平台兜底**
@@ -52,7 +52,7 @@
 
 1. 双 shell 命令示例 + SKILL.md 措辞清理
 2. 字体跨平台兜底 ✅ 已落地（2026-08-27，待 mac/Linux 实机验证）
-3. design_emblem.py（OpenAI 兼容视觉 API 适配，环境变量配置）
+3. design_emblem.py ✅ 已落地（2026-08-27）
 4. PORTING 检查清单定稿 + 冒烟测试
 5. git 提交
 
