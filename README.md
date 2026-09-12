@@ -11,7 +11,7 @@ Turn any photo into a stylized *Arknights* / *Arknights: Endfield* medal (蚀刻
 ## Project boundary
 
 - Not an official asset exporter: the engine reimagines your input as a stylized medal; it does not reproduce official art verbatim.
-- Fully local: photos are processed on your machine. The web tool loads an in-browser AI matting model (`@imgly/background-removal`) and falls back to the built-in algorithm; nothing is uploaded.
+- Local by default: photos are processed on your machine. The web tool loads a vendored in-browser AI matting model (`@imgly/background-removal`, committed under `web/vendor/`; pinned public CDNs only as a fallback) and falls back to the built-in algorithm; photos never leave the browser. The one exception is the optional `engine/design_emblem.py` adapter, which sends a compressed copy of the photo to the vision-API endpoint you configure (default `api.openai.com`) — use it only with endpoints you trust.
 - Player-made only: outputs are derivative stylistic works. Do not use them commercially or to claim official association.
 
 ## Project components
@@ -25,6 +25,7 @@ Turn any photo into a stylized *Arknights* / *Arknights: Endfield* medal (蚀刻
 | `engine/batch_test.py` / `engine/gen_designs.py` | Real-photo stress-test rig / procedural emblem-design generator |
 | `web/index.html` | Single-file web tool (drag, tune, download) — an early template build; the newer templates (Endfield rework + candy) are being ported |
 | `PROMPTS.md` | Self-contained operator manual: design prompt template, QC checklist, parameter reference |
+| `NANO_PROMPTS.md` | Self-contained playbook: turn a one-sentence request into a ready-to-use image prompt for Google nano banana (no engine needed) |
 | `PORTING.md` | Porting plan to other agent environments (technical direction plan; schedule not yet set) |
 | `reference/` | Research fetch scripts (regenerate the downloaded study material) and `DESIGN_SPEC.md` (design research notes) |
 | `samples/` | Test inputs |
@@ -130,13 +131,49 @@ installed and tested.
    pip install -r requirements.txt     # re-run when requirements change
    # Update an installed skill (re-copy the runtime subset):
    Copy-Item -Recurse -Force `
-     <repo>\SKILL.md, <repo>\PROMPTS.md, <repo>\engine, <repo>\web `
+     <repo>\SKILL.md, <repo>\PROMPTS.md, <repo>\NANO_PROMPTS.md, <repo>\engine, <repo>\web, <repo>\references `
      "$env:USERPROFILE\.agents\skills\arknights-medal-designer"
    # Uninstall the skill:
    Remove-Item -Recurse -Force "$env:USERPROFILE\.agents\skills\arknights-medal-designer"
    ```
 
    The fetch scripts under `reference/` are research-only; they download third-party study material and are not needed to use the tool. Never commit or distribute other people's photos processed with it.
+
+### Fully-local mode (local vision model + local matting)
+
+Everything can run without any cloud API. Paths are environment-variable driven — move your
+model directories anytime by updating the variables; the code never hardcodes a location.
+
+1. **Local vision model** (produces the emblem-design JSON with no cloud round-trip). Install a
+   portable Ollama anywhere, point `OLLAMA_MODELS` at your model directory, pull a vision model:
+
+   ```powershell
+   $env:OLLAMA_MODELS='D:\ollama_models'          # any directory you like; move freely
+   ollama pull qwen2.5vl:7b                       # ~6 GB; 3B tier also works
+   ollama serve                                   # OpenAI-compatible API on 127.0.0.1:11434
+   ```
+
+   Then drive the design adapter against the loopback endpoint:
+
+   ```powershell
+   $env:OPENAI_BASE_URL='http://127.0.0.1:11434/v1'   # loopback http is explicitly allowed
+   $env:OPENAI_MODEL='qwen2.5vl:7b'
+   python engine/design_emblem.py photo.jpg -o design.json --render out.png
+   ```
+
+2. **Local AI matting (CLI)** — better subjects on cluttered backgrounds than the classic
+   algorithm. Needs `pip install onnxruntime` plus a U²-Net-family model:
+
+   ```powershell
+   $env:MEDAL_AI_MATTING='1'
+   $env:MEDAL_MATTING_MODEL='D:\medal_models\silueta.onnx'   # any location
+   ```
+
+   Unavailable or failing → the engine silently falls back to the classic matting.
+
+3. The web tool loads its matting model in-browser from the vendored copy (CDN only as fallback).
+
+See `--list-types` for the full catalogue of medal types (style × tone × mode).
 
 ## Parameters
 
@@ -162,6 +199,8 @@ Visual acceptance (per `PROMPTS.md` §三): candy ≥ 0.85 / metal ≥ 0.85 / ga
 
 - Classic matting works best with a clear subject over a simple background; on low confidence the engine falls back to the full image with a rounded fade-in and warns.
 - The web tool is still an early template build; the newer templates (Endfield rework + candy) are not ported yet.
+- The web tool loads the matting model from the vendored copy in `web/vendor/` first; pinned public CDNs (esm.sh / jsDelivr / unpkg) are only a fallback when the vendored copy is missing.
+- Inputs above 80 MP are rejected up front (decompression-bomb guard); the web tool downscales inputs to 4096 px before processing.
 - Fonts: Windows system fonts are primary; mac/Linux fallbacks are planned (see `PORTING.md`).
 
 ## Roadmap
@@ -174,6 +213,7 @@ Planned directions, not release commitments:
 ## More documentation
 
 - [PROMPTS.md](PROMPTS.md) — operator manual and QC checklist
+- [NANO_PROMPTS.md](NANO_PROMPTS.md) — one-sentence → nano banana image-prompt playbook
 - [SKILL.md](SKILL.md) — agent skill definition
 - [PORTING.md](PORTING.md) — porting plan
 - [reference/DESIGN_SPEC.md](reference/DESIGN_SPEC.md) — design research notes

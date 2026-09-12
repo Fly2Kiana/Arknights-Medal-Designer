@@ -104,7 +104,7 @@
     <button id="gen">生成蚀刻章</button>
     <button id="dl">下载 PNG</button>
   </div>
-  <div id="status">等待上传照片…</div>
+  <div id="status"><span id="spin" class="spin" style="display:none"></span><span id="status-text">等待上传照片…</span></div>
 </aside>
 <main>
   <canvas id="stage" width="1000" height="1150"></canvas>
@@ -113,10 +113,13 @@
 <script type="module">
 'use strict';
 const $ = id => document.getElementById(id);
-const stage = $('stage'), statusEl = $('status');
-let srcImage = null, outBlob = null;
+const stage = $('stage'), statusEl = $('status'), statusText = $('status-text'), spinEl = $('spin');
+let srcImage = null, srcUrl = null, outBlob = null;
 
-function setStatus(msg, cls='') { statusEl.className = cls; statusEl.innerHTML = msg; }
+function setStatus(msg, cls='', spin=false) {
+  statusEl.className = cls; statusText.textContent = msg;
+  spinEl.style.display = spin ? '' : 'none';
+}
 
 /* ---------------- 上传 ---------------- */
 const drop = $('drop'), file = $('file');
@@ -131,28 +134,40 @@ window.addEventListener('paste', e => {
   if (it) loadFile(it.getAsFile());
 });
 function loadFile(f) {
+  const url = URL.createObjectURL(f);
+  if (srcUrl) URL.revokeObjectURL(srcUrl);   // 释放上一张的 blob URL（srcImage 已被替换）
+  srcUrl = url;
   const img = new Image();
   img.onload = () => { srcImage = img; setStatus(`已载入 ${img.naturalWidth}×${img.naturalHeight}，点击「生成蚀刻章」`); generate(); };
-  img.onerror = () => setStatus('图片载入失败', 'err');
-  img.src = URL.createObjectURL(f);
+  img.onerror = () => { URL.revokeObjectURL(url); if (srcUrl === url) srcUrl = null; setStatus('图片载入失败', 'err'); };
+  img.src = url;
 }
 
-/* ---------------- 抠图：优先浏览器端 AI 模型，降级内置算法 ---------------- */
-let rembgFn = undefined, rembgTried = false;
+/* ---------------- 抠图：优先本地 vendor 模型，回退 CDN / 内置算法 ---------------- */
+let rembgFn = undefined, rembgSource = '', rembgTried = false;
+const IMGLY_VERSION = '1.5.5';
+const CDN_LIST = [
+  'https://esm.sh/@imgly/background-removal@' + IMGLY_VERSION,
+  'https://cdn.jsdelivr.net/npm/@imgly/background-removal@' + IMGLY_VERSION + '/+esm',
+  'https://unpkg.com/@imgly/background-removal@' + IMGLY_VERSION + '?module',
+];
 async function getRembg() {
   if (rembgTried) return rembgFn;
   rembgTried = true;
-  const CDNS = [
-    'https://esm.sh/@imgly/background-removal@1.5.5',
-    'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm',
-    'https://unpkg.com/@imgly/background-removal@1.5.5?module',
-  ];
-  for (const url of CDNS) {
+  // 1) 仓库内置 vendor 副本（离线可用，零 CDN 信任面）
+  try {
+    setStatus('正在加载本地 AI 抠图模型…', '', true);
+    const mod = await import('./vendor/imgly/index.mjs');
+    const fn = mod.removeBackground || mod.default;
+    if (typeof fn === 'function') { rembgFn = fn; rembgSource = 'local'; return fn; }
+  } catch (e) { /* 回退 CDN */ }
+  // 2) 公共 CDN（版本锁定）
+  for (const url of CDN_LIST) {
     try {
-      setStatus(`<span class="spin"></span>正在加载 AI 抠图模型（仅首次，约几十 MB）…`);
+      setStatus(`正在加载 AI 抠图模型（仅首次，约几十 MB）…`, '', true);
       const mod = await import(url);
       const fn = mod.removeBackground || mod.default;
-      if (typeof fn === 'function') { rembgFn = fn; return fn; }
+      if (typeof fn === 'function') { rembgFn = fn; rembgSource = 'cdn'; return fn; }
     } catch (e) { /* 下一个 CDN */ }
   }
   rembgFn = null;
@@ -162,7 +177,9 @@ async function aiCut(img) {
   const fn = await getRembg();
   if (!fn) return null;
   try {
-    const blob = await fn(await (await fetch(img.src)).blob(), { device: 'cpu' });
+    const opts = { device: 'cpu' };
+    if (rembgSource === 'local') opts.publicPath = './vendor/imgly-data/';
+    const blob = await fn(await (await fetch(img.src)).blob(), opts);
     const bmp = await createImageBitmap(await blob);
     const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
     c.getContext('2d').drawImage(bmp, 0, 0);
@@ -336,9 +353,13 @@ function hsv2rgb(h,s,v){
   return [r*255, g*255, b*255];
 }
 function toCanvas(im){
-  const c=document.createElement('canvas');
-  c.width=im.naturalWidth||im.width; c.height=im.naturalHeight||im.height;
-  c.getContext('2d').drawImage(im,0,0);
+  // 输入降采样上限：防超大图把 canvas/getImageData 内存打爆（引擎侧等价防护为 80MP 上限）
+  const MAX_INPUT_DIM = 4096;
+  let w = im.naturalWidth||im.width, h = im.naturalHeight||im.height;
+  const sc = Math.min(1, MAX_INPUT_DIM/Math.max(w,h));
+  w = Math.max(1, Math.round(w*sc)); h = Math.max(1, Math.round(h*sc));
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  c.getContext('2d').drawImage(im,0,0,w,h);
   return c;
 }
 function hasAlphaCanvas(c){
@@ -1312,17 +1333,17 @@ async function generate(){
       subject=base;
       setStatus('检测到透明通道，按设计资产直接入章');
     }else if(!$('no-mat').checked){
-      setStatus('<span class="spin"></span>AI 抠图中…');
+      setStatus('AI 抠图中…','',true);
       subject=await aiCut(srcImage);
       if(subject)setStatus('AI 模型抠图完成');
       else{
-        setStatus('<span class="spin"></span>AI 模型不可用，使用内置算法抠图…');
+        setStatus('AI 模型不可用，使用内置算法抠图…','',true);
         subject=await classicCut(srcImage);
         if(subject)setStatus('已用内置算法完成抠图','warn');
         else{subject=base;setStatus('自动抠图置信度低，回退整图入章','warn');}
       }
     }else subject=base;
-    setStatus('<span class="spin"></span>纹章化与章体合成中…');
+    setStatus('纹章化与章体合成中…','',true);
     await new Promise(r=>setTimeout(r,30));
     const tone=$('tone').value;
     const text=$('t-main').value.trim()||'蚀刻勋章';
@@ -1354,9 +1375,11 @@ $('gen').onclick=generate;
 $('dl').onclick=()=>{
   if(!outBlob){setStatus('请先生成蚀刻章','warn');return;}
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(outBlob);
+  const u=URL.createObjectURL(outBlob);
+  a.href=u;
   a.download=`arknights_medal_designer_${style}_${Date.now()}.png`;
   a.click();
+  setTimeout(()=>URL.revokeObjectURL(u),1000);
 };
 setStatus('等待上传照片…');
 </script>

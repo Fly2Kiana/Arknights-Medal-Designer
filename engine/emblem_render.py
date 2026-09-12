@@ -97,24 +97,27 @@ def _auto_materialize(shapes, canvas_px):
     for s in shapes:
         t = s.get("t")
         w = max(6, int((s.get("w") or 12) * canvas_px / 1000 * 0.6))
-        if t == "poly" and s.get("pts"):
-            pts = [tuple(p) for p in s["pts"]]
-            if s.get("fill") is None and s.get("stroke") is not None:
-                sd.polygon(pts, outline=255, width=w)
-        elif t == "circle" and s.get("cx") is not None:
-            cx, cy, r = s["cx"], s["cy"], s["r"]
-            if s.get("fill") is None and s.get("stroke") is not None:
-                sd.ellipse([cx - r, cy - r, cx + r, cy + r], outline=255, width=w)
-        elif t == "rect" and s.get("x0") is not None:
-            if s.get("fill") is None and s.get("stroke") is not None:
-                sd.rectangle([s["x0"], s["y0"], s["x1"], s["y1"]], outline=255, width=w)
-        elif t == "line":
-            sd.line([(s["x1"], s["y1"]), (s["x2"], s["y2"])], fill=255, width=w)
-        elif t == "arc":
-            cx, cy, r = s["cx"], s["cy"], s["r"]
-            sd.arc([cx - r, cy - r, cx + r, cy + r],
-                   start=float(s.get("a0", 0)), end=float(s.get("a1", 360)),
-                   fill=255, width=w)
+        try:
+            if t == "poly" and s.get("pts"):
+                pts = [tuple(p) for p in s["pts"]]
+                if s.get("fill") is None and s.get("stroke") is not None:
+                    sd.polygon(pts, outline=255, width=w)
+            elif t == "circle" and s.get("cx") is not None:
+                cx, cy, r = s["cx"], s["cy"], s["r"]
+                if s.get("fill") is None and s.get("stroke") is not None:
+                    sd.ellipse([cx - r, cy - r, cx + r, cy + r], outline=255, width=w)
+            elif t == "rect" and s.get("x0") is not None:
+                if s.get("fill") is None and s.get("stroke") is not None:
+                    sd.rectangle([s["x0"], s["y0"], s["x1"], s["y1"]], outline=255, width=w)
+            elif t == "line":
+                sd.line([(s["x1"], s["y1"]), (s["x2"], s["y2"])], fill=255, width=w)
+            elif t == "arc":
+                cx, cy, r = s["cx"], s["cy"], s["r"]
+                sd.arc([cx - r, cy - r, cx + r, cy + r],
+                       start=float(s.get("a0", 0)), end=float(s.get("a1", 360)),
+                       fill=255, width=w)
+        except (KeyError, TypeError, ValueError, IndexError):
+            continue
 
     m = np.asarray(stroke_img) > 0
     h, w = m.shape
@@ -162,7 +165,7 @@ def _sample_bezier(p0, p1, p2, p3, n=48):
 
 
 def _draw_ornament(d, s, lum_color, canvas_px):
-    """纹章装饰原语：bezier/star/sunburst/laurel/banner"""
+    """纹章装饰原语：bezier/star/sunburst/laurel/banner（字段缺失/非法时跳过该图元）"""
     t = s.get("t")
     w = max(3, int((s.get("w") or 10) * canvas_px / 1000))
     sc = lum_color(float(s.get("stroke") or 0.22), s)
@@ -176,7 +179,7 @@ def _draw_ornament(d, s, lum_color, canvas_px):
     elif t == "star":
         cx, cy = s["cx"], s["cy"]
         r1, r2 = s.get("r1", s.get("r", 30)), s.get("r2", s.get("r1", 30) * 0.45)
-        n = int(s.get("points", 5))
+        n = max(2, int(s.get("points", 5) or 5))   # 防御：points<=1 退化为不可绘多边形
         rot = math.radians(float(s.get("rot", -90)))
         pts = []
         for i in range(n * 2):
@@ -188,7 +191,7 @@ def _draw_ornament(d, s, lum_color, canvas_px):
     elif t == "sunburst":
         cx, cy = s["cx"], s["cy"]
         r0, r1 = s.get("r0", 40), s.get("r1", 160)
-        n = int(s.get("count", 16))
+        n = max(1, int(s.get("count", 16) or 16))
         for i in range(n):
             ang = math.radians(360.0 * i / n + float(s.get("rot", 0)))
             x0 = cx + r0 * math.cos(ang)
@@ -201,7 +204,7 @@ def _draw_ornament(d, s, lum_color, canvas_px):
         cx, cy = s["cx"], s["cy"]
         length = s.get("length", 220)
         ang0 = math.radians(float(s.get("angle", 45)))
-        n = int(s.get("branches", 8))
+        n = max(1, int(s.get("branches", 8) or 8))   # 防御：branches=0 会除零
         stem = []
         for i in range(n + 1):
             t2 = i / n
@@ -221,8 +224,8 @@ def _draw_ornament(d, s, lum_color, canvas_px):
                           fill=sc if s.get("fill") is not None else None,
                           outline=sc, width=max(2, w - 2))
     elif t == "banner":
-        x0, y0 = s["x0"], s["y0"]
-        x1, y1 = s["x1"], s["y1"]
+        x0, y0 = float(s.get("x0", 0)), float(s.get("y0", 0))
+        x1, y1 = float(s.get("x1", x0 + 400)), float(s.get("y1", y0))
         if abs(y1 - y0) < 4:
             y1 = y0 + 96
         fold = s.get("fold", 26)
@@ -239,6 +242,9 @@ def _normalize_shapes(shapes):
     """兼容视觉模型可能产出的多种图元格式"""
     out = []
     for s in shapes:
+        if not isinstance(s, dict):   # 防御：模型可能混入字符串等垃圾项
+            print(f"[warn] 忽略非对象图元项: {str(s)[:80]}", file=sys.stderr)
+            continue
         t = s.get("t")
         if not t:
             # 从字段推断类型
@@ -264,12 +270,27 @@ def _normalize_shapes(shapes):
                 except ValueError:
                     pass
             ns["pts"] = pts
+        # pts 列表逐点数值化（模型可能输出字符串数字或残缺点位）
+        elif isinstance(ns.get("pts"), list):
+            pts = []
+            for p in ns["pts"]:
+                try:
+                    pts.append([float(p[0]), float(p[1])])
+                except (TypeError, ValueError, IndexError):
+                    continue
+            ns["pts"] = pts
         # rect 用 x/y/w/h
         if t == "rect" and "x" in ns and "x0" not in ns:
-            ns["x0"] = float(ns.pop("x"))
-            ns["y0"] = float(ns.pop("y", ns["y0"] if "y0" in ns else 0))
-            ns["x1"] = ns["x0"] + float(ns.pop("w", 0))
-            ns["y1"] = ns["y0"] + float(ns.pop("h", 0))
+            try:
+                ns["x0"] = float(ns.pop("x"))
+                ns["y0"] = float(ns.pop("y", ns["y0"] if "y0" in ns else 0))
+                ns["x1"] = ns["x0"] + float(ns.pop("w", 0))
+                ns["y1"] = ns["y0"] + float(ns.pop("h", 0))
+            except (TypeError, ValueError):
+                ns["x0"] = ns.get("x0", 0) or 0
+                ns["y0"] = ns.get("y0", 0) or 0
+                ns["x1"] = ns["x0"]
+                ns["y1"] = ns["y0"]
         # arc 角度字段别名
         if "a0" not in ns and "a1" in ns and "a2" in ns:
             ns["a0"], ns["a1"] = float(ns["a1"]), float(ns["a2"])
@@ -283,7 +304,10 @@ def _normalize_shapes(shapes):
                 if isinstance(v, str) or v is None:
                     ns[k] = None
                 else:
-                    ns[k] = float(v)
+                    try:
+                        ns[k] = float(v)
+                    except (TypeError, ValueError):
+                        ns[k] = None
         out.append(ns)
     return out
 
@@ -291,7 +315,13 @@ def _normalize_shapes(shapes):
 def render_emblem(design_json, tone="silver", canvas_px=1000, style="lineart",
                   polarity="dark-on-light", carve="machine"):
     data = json.loads(design_json)
-    shapes = _normalize_shapes(data.get("shapes", []))
+    if not isinstance(data, dict):
+        raise SystemExit('[error] 设计稿 JSON 顶层必须是对象 {"shapes":[...]}，'
+                         f"实际为 {type(data).__name__}")
+    shapes_in = data.get("shapes", [])
+    if not isinstance(shapes_in, list):
+        raise SystemExit('[error] 设计稿 JSON 的 "shapes" 字段必须是数组')
+    shapes = _normalize_shapes(shapes_in)
     pal = STAMP_PAL if tone == "stamp" else be.PALETTES.get(tone, be.PALETTES["silver"])
     ink = _lum_color(0.22, pal, polarity)
 
@@ -304,14 +334,18 @@ def render_emblem(design_json, tone="silver", canvas_px=1000, style="lineart",
             continue
         tmp = Image.new("L", (canvas_px, canvas_px), 0)
         d0 = ImageDraw.Draw(tmp)
-        if t == "poly":
-            d0.polygon([tuple(p) for p in s["pts"]], fill=255)
-        elif t == "circle":
-            cx, cy, r = s["cx"], s["cy"], s["r"]
-            d0.ellipse([cx - r, cy - r, cx + r, cy + r], fill=255)
-        elif t == "rect":
-            d0.rectangle([s["x0"], s["y0"], s["x1"], s["y1"]], fill=255)
-        else:
+        try:
+            if t == "poly":
+                d0.polygon([tuple(p) for p in s["pts"]], fill=255)
+            elif t == "circle":
+                cx, cy, r = s["cx"], s["cy"], s["r"]
+                d0.ellipse([cx - r, cy - r, cx + r, cy + r], fill=255)
+            elif t == "rect":
+                d0.rectangle([s["x0"], s["y0"], s["x1"], s["y1"]], fill=255)
+            else:
+                continue
+        except (KeyError, TypeError, ValueError, IndexError) as e:
+            print(f"[warn] 跳过无法解析的填充图元（{e}）: {str(s)[:120]}", file=sys.stderr)
             continue
         m = np.asarray(tmp) > 127
         lum_map[m] = float(fill)
@@ -351,13 +385,17 @@ def render_emblem(design_json, tone="silver", canvas_px=1000, style="lineart",
             if fill is None or t not in ("poly", "circle", "rect"):
                 continue
             col = _lum_color(float(fill), pal, polarity) + (255,)
-            if t == "poly":
-                dfl.polygon([tuple(p) for p in s["pts"]], fill=col)
-            elif t == "circle":
-                cx, cy, r = s["cx"], s["cy"], s["r"]
-                dfl.ellipse([cx - r, cy - r, cx + r, cy + r], fill=col)
-            elif t == "rect":
-                dfl.rectangle([s["x0"], s["y0"], s["x1"], s["y1"]], fill=col)
+            try:
+                if t == "poly":
+                    dfl.polygon([tuple(p) for p in s["pts"]], fill=col)
+                elif t == "circle":
+                    cx, cy, r = s["cx"], s["cy"], s["r"]
+                    dfl.ellipse([cx - r, cy - r, cx + r, cy + r], fill=col)
+                elif t == "rect":
+                    dfl.rectangle([s["x0"], s["y0"], s["x1"], s["y1"]], fill=col)
+            except (KeyError, TypeError, ValueError, IndexError) as e:
+                print(f"[warn] 跳过无法解析的填充图元（{e}）: {str(s)[:120]}", file=sys.stderr)
+                continue
         out.alpha_composite(tmp)
 
     # 3) 描边层（细线 + 蚀刻刻槽：light-on-dark 白线下衬暗槽，线如刻进金属）
@@ -368,47 +406,54 @@ def render_emblem(design_json, tone="silver", canvas_px=1000, style="lineart",
     for s in shapes:
         t = s.get("t")
         if t in ("bezier", "star", "sunburst", "laurel", "banner"):
-            _draw_ornament(sd, s, lam, canvas_px)
+            try:
+                _draw_ornament(sd, s, lam, canvas_px)
+            except (KeyError, TypeError, ValueError, IndexError, ZeroDivisionError) as e:
+                print(f"[warn] 跳过无法解析的装饰图元（{e}）: {str(s)[:120]}", file=sys.stderr)
             continue
         w = max(3, int((s.get("w") or 12) * canvas_px / 1000 * (0.45 if style == "lineart" else 1.0)))
         stroke = s.get("stroke")
         sc = _lum_color(float(stroke), pal, polarity) + (255,) if stroke is not None else None
-        if t == "poly" and s.get("pts"):
-            pts = [tuple(p) for p in s["pts"]]
-            if sc:
+        try:
+            if t == "poly" and s.get("pts"):
+                pts = [tuple(p) for p in s["pts"]]
+                if sc:
+                    if engrave:
+                        sd.polygon([(x + 2, y + 2) for x, y in pts], outline=shc, width=w)
+                    sd.polygon(pts, outline=sc, width=w)
+            elif t == "circle":
+                cx, cy, r = s["cx"], s["cy"], s["r"]
+                if sc:
+                    if engrave:
+                        sd.ellipse([cx - r + 2, cy - r + 2, cx + r + 2, cy + r + 2],
+                                   outline=shc, width=w)
+                    sd.ellipse([cx - r, cy - r, cx + r, cy + r], outline=sc, width=w)
+            elif t == "rect":
+                if sc:
+                    if engrave:
+                        sd.rectangle([s["x0"] + 2, s["y0"] + 2, s["x1"] + 2, s["y1"] + 2],
+                                     outline=shc, width=w)
+                    sd.rectangle([s["x0"], s["y0"], s["x1"], s["y1"]], outline=sc, width=w)
+            elif t == "line":
+                lum = s.get("lum", 0.22)
+                c = _lum_color(float(lum), pal, polarity) + (255,)
                 if engrave:
-                    sd.polygon([(x + 2, y + 2) for x, y in pts], outline=shc, width=w)
-                sd.polygon(pts, outline=sc, width=w)
-        elif t == "circle":
-            cx, cy, r = s["cx"], s["cy"], s["r"]
-            if sc:
+                    sd.line([(s["x1"] + 2, s["y1"] + 2), (s["x2"] + 2, s["y2"] + 2)],
+                            fill=shc, width=w)
+                sd.line([(s["x1"], s["y1"]), (s["x2"], s["y2"])], fill=c, width=w)
+            elif t == "arc":
+                cx, cy, r = s["cx"], s["cy"], s["r"]
+                a0, a1 = s.get("a0", 0), s.get("a1", 360)
+                lum = s.get("lum", s.get("stroke", 0.88)) or 0.88
+                c = _lum_color(float(lum), pal, polarity) + (255,)
                 if engrave:
-                    sd.ellipse([cx - r + 2, cy - r + 2, cx + r + 2, cy + r + 2],
-                               outline=shc, width=w)
-                sd.ellipse([cx - r, cy - r, cx + r, cy + r], outline=sc, width=w)
-        elif t == "rect":
-            if sc:
-                if engrave:
-                    sd.rectangle([s["x0"] + 2, s["y0"] + 2, s["x1"] + 2, s["y1"] + 2],
-                                 outline=shc, width=w)
-                sd.rectangle([s["x0"], s["y0"], s["x1"], s["y1"]], outline=sc, width=w)
-        elif t == "line":
-            lum = s.get("lum", 0.22)
-            c = _lum_color(float(lum), pal, polarity) + (255,)
-            if engrave:
-                sd.line([(s["x1"] + 2, s["y1"] + 2), (s["x2"] + 2, s["y2"] + 2)],
-                        fill=shc, width=w)
-            sd.line([(s["x1"], s["y1"]), (s["x2"], s["y2"])], fill=c, width=w)
-        elif t == "arc":
-            cx, cy, r = s["cx"], s["cy"], s["r"]
-            a0, a1 = s.get("a0", 0), s.get("a1", 360)
-            lum = s.get("lum", s.get("stroke", 0.88)) or 0.88
-            c = _lum_color(float(lum), pal, polarity) + (255,)
-            if engrave:
-                sd.arc([cx - r + 2, cy - r + 2, cx + r + 2, cy + r + 2],
-                       start=float(a0), end=float(a1), fill=shc, width=w)
-            sd.arc([cx - r, cy - r, cx + r, cy + r], start=float(a0), end=float(a1),
-                   fill=c, width=w)
+                    sd.arc([cx - r + 2, cy - r + 2, cx + r + 2, cy + r + 2],
+                           start=float(a0), end=float(a1), fill=shc, width=w)
+                sd.arc([cx - r, cy - r, cx + r, cy + r], start=float(a0), end=float(a1),
+                       fill=c, width=w)
+        except (KeyError, TypeError, ValueError, IndexError) as e:
+            print(f"[warn] 跳过无法解析的描边图元（{e}）: {str(s)[:120]}", file=sys.stderr)
+            continue
 
     out = carve_texture(out, carve)
 
