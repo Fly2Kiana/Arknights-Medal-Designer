@@ -13,6 +13,9 @@ design_emblem.py · OpenAI 兼容视觉 API 适配器
     OPENAI_MODEL      可选，默认 gpt-4o-mini（需支持图片输入）
     OPENAI_MAX_TOKENS 可选，默认 1024（GLM-4V-Flash 上限；其它端点可调大，如 4000）
 
+隐私注意：本适配器会把输入照片压缩后（base64）发送到你配置的端点——这是它与引擎
+其它路径（纯本地）的唯一例外。端点强制 https（仅本机回环地址允许 http）。
+
 用法：
     $env:OPENAI_API_KEY='...'
     python engine/design_emblem.py photo.jpg -o design.json
@@ -76,6 +79,7 @@ def image_to_data_uri(path, max_dim=1024):
     from PIL import Image
     img = Image.open(path)
     img.load()
+    be.check_input_pixels(img, "视觉 API 输入")
     img = img.convert("RGB")
     if max(img.size) > max_dim:
         img.thumbnail((max_dim, max_dim), Image.LANCZOS)
@@ -130,14 +134,27 @@ def call_vision(data_uri, api_key, base_url, model, timeout=180, max_tokens=1024
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")[:500]
         raise SystemExit(f"[error] API 返回 HTTP {e.code}: {detail}")
-    content = resp["choices"][0]["message"]["content"]
+    except urllib.error.URLError as e:
+        raise SystemExit(f"[error] 无法连接视觉 API 端点：{e.reason}")
+    try:
+        content = resp["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        raise SystemExit(
+            "[error] API 响应结构异常（choices/message/content 缺失），"
+            "请确认端点为 OpenAI 兼容 chat/completions。响应片段：\n"
+            + json.dumps(resp, ensure_ascii=False)[:300])
+    if not isinstance(content, str):
+        raise SystemExit(
+            "[error] API 响应的 content 不是文本（可能触发了内容过滤或端点不兼容）。响应片段：\n"
+            + json.dumps(resp, ensure_ascii=False)[:300])
     try:
         design = extract_json(content)
     except json.JSONDecodeError:
         raise SystemExit(
             "[error] 模型回复无法解析为 JSON（可能因输出被 max_tokens 截断）。\n"
             "端点允许时可尝试 --max-tokens 调大后重试。回复片段：\n" + content[:300])
-    if not isinstance(design.get("shapes"), list) or not design["shapes"]:
+    if (not isinstance(design, dict)
+            or not isinstance(design.get("shapes"), list) or not design["shapes"]):
         raise SystemExit("[error] 模型回复不含有效 shapes 列表，请重试或换模型")
     return design
 
@@ -176,6 +193,15 @@ def main():
         raise SystemExit(
             "[error] OPENAI_API_KEY 含非 ASCII 字符（可能仍是占位文本，未替换为真实密钥）。\n"
             "请先执行 $env:OPENAI_API_KEY='真实密钥' 后重试。")
+
+    # 明文传输防护：照片（base64）与 Bearer 密钥都会发往该端点，拒绝非加密的非本机地址
+    base = args.base_url.strip()
+    if base.startswith("http://"):
+        host = base[len("http://"):].split("/", 1)[0].split(":", 1)[0].lower()
+        if host not in ("localhost", "127.0.0.1", "::1", "[::1]"):
+            raise SystemExit(
+                f"[error] OPENAI_BASE_URL 指向明文 http://{host}：API 密钥与照片将以明文传输。\n"
+                "请改用 https:// 端点；仅本机回环地址（localhost/127.0.0.1）允许 http。")
 
     data_uri = image_to_data_uri(args.input)
     design = call_vision(data_uri, api_key, args.base_url, args.model, args.timeout,

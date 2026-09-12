@@ -199,6 +199,18 @@ def _fill_holes(mask):
     return mask | (inv & ~outside)
 
 
+# 输入像素上限：显式防线，早于 Pillow 默认 DecompressionBomb 告警（约 1.79 亿像素）触发
+MAX_INPUT_PIXELS = 80_000_000
+
+
+def check_input_pixels(img: Image.Image, source: str = "输入"):
+    if img.width * img.height > MAX_INPUT_PIXELS:
+        raise SystemExit(
+            f"[error] {source}图像 {img.width}x{img.height}"
+            f"（{img.width * img.height // 1_000_000}MP）超过 {MAX_INPUT_PIXELS // 1_000_000}MP 上限，"
+            "请先缩小图片后重试（防御解压炸弹）")
+
+
 def extract_subject(img: Image.Image, tolerance: float = 26.0):
     img = img.convert("RGB")
     max_dim = 760
@@ -248,6 +260,63 @@ def crop_to_subject(rgba, pad_ratio=0.03):
     l, t = max(0, l - pw), max(0, t - ph)
     r, b = min(rgba.width, r + pw), min(rgba.height, b + ph)
     return rgba.crop((l, t, r, b))
+
+
+# ----------------------------------------------------------------------------
+# 一·〇、可选 AI 抠图后端（onnxruntime + u2net 族模型；零硬编码路径）
+#   开关：MEDAL_AI_MATTING=1 启用；模型：MEDAL_MATTING_MODEL 指向 .onnx 文件
+#   （如 silueta/u2netp）。不可用或失败一律静默回退经典抠图，不影响默认行为。
+# ----------------------------------------------------------------------------
+
+def _find_matting_model():
+    env = os.environ.get("MEDAL_MATTING_MODEL", "").strip()
+    if env and os.path.isfile(env):
+        return env
+    here = os.path.dirname(os.path.abspath(__file__))
+    for p in (os.path.join(here, os.pardir, "models", "silueta.onnx"),
+              os.path.join(os.path.expanduser("~"), ".medal", "models", "silueta.onnx")):
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def ai_matting_enabled():
+    return os.environ.get("MEDAL_AI_MATTING", "").strip().lower() in ("1", "true", "on", "yes")
+
+
+def ai_matting(img: Image.Image):
+    """U²-Net 族 salient object detection 抠图。返回 RGBA 或 None（不可用/失败）。"""
+    try:
+        import onnxruntime as ort
+    except ImportError:
+        return None
+    model_path = _find_matting_model()
+    if not model_path:
+        return None
+    try:
+        sess = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        inp = sess.get_inputs()[0]
+        # u2net 族固定 320x320 输入；shape 可能带动态维度
+        w = inp.shape[2] if isinstance(inp.shape[2], int) and inp.shape[2] > 0 else 320
+        h = inp.shape[3] if isinstance(inp.shape[3], int) and inp.shape[3] > 0 else 320
+        small = img.convert("RGB").resize((w, h), Image.BILINEAR)
+        x = np.asarray(small, dtype=np.float32) / 255.0
+        x = (x - np.array([0.485, 0.456, 0.406], dtype=np.float32)) \
+            / np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        x = x.transpose(2, 0, 1)[None]
+        out = sess.run(None, {inp.name: x})[0]
+        out = np.squeeze(out)
+        if out.ndim != 2 or out.max() - out.min() < 1e-6:
+            return None
+        out = (out - out.min()) / (out.max() - out.min())
+        mask = Image.fromarray((out * 255).astype(np.uint8), "L").resize(
+            img.size, Image.LANCZOS)
+        rgba = img.convert("RGBA")
+        rgba.putalpha(mask)
+        return rgba
+    except Exception as e:   # 任何推理失败都回退，不中断出章
+        print(f"[warn] AI 抠图失败，回退经典算法：{e}", file=sys.stderr)
+        return None
 
 
 # ----------------------------------------------------------------------------
@@ -583,13 +652,12 @@ def compose_arknights(face, text, subtitle="", serial="", tone="silver",
     hex_mask = Image.new("L", (CW, CH), 0)
     ImageDraw.Draw(hex_mask).polygon(_hex_pts(cx, cy, R), fill=255)
     field = Image.new("RGB", (CW, CH))
-    fpx = field.load()
+    dfd = ImageDraw.Draw(field)
     for y in range(CH):
         t = max(0.0, min(1.0, (y - (cy - R)) / (2 * R)))
         c0, c1 = field_top, field_bot
         col = tuple(int(c0[i] + (c1[i] - c0[i]) * t) for i in range(3))
-        for x in range(CW):
-            fpx[x, y] = col
+        dfd.line([(0, y), (CW, y)], fill=col)
     canvas.paste(field, (0, 0), hex_mask)
 
     # ---- 多层同心细线套环（官方核心语言）----
@@ -1107,13 +1175,12 @@ def compose_candy(subject_rgba, text="", subtitle="", number="",
 
     # ---- L2 粉彩底场 ----
     field_img = Image.new("RGB", (CW, CH))
-    fp = field_img.load()
+    dfp = ImageDraw.Draw(field_img)
     for y in range(CH):
         t = y / (CH - 1)
         col = tuple(int(field_color[0][i] + (field_color[1][i] - field_color[0][i]) * t)
                     for i in range(3))
-        for x in range(CW):
-            fp[x, y] = col
+        dfp.line([(0, y), (CW, y)], fill=col)
     canvas.paste(field_img.convert("RGBA"), (0, 0), field_mask)
 
     # ---- L3 底纹 ----
@@ -1273,6 +1340,7 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
              polarity="dark-on-light", carve="machine"):
     src = Image.open(input_path)
     src.load()
+    check_input_pixels(src)
     if getattr(src, "is_animated", False):
         src.seek(0)
 
@@ -1286,6 +1354,8 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
 
     warn = ""
     compose_tone = None
+    face = None
+    matting_backend = "n/a"
     if emblem_design:
         # ---- 主路径：AI 设计纹章（视觉模型产出的几何图元 JSON）----
         from emblem_render import render_emblem
@@ -1294,12 +1364,16 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
             with open(emblem_design, encoding="utf-8-sig") as f:
                 emblem_design = f.read().strip()
         # 社区主流：浅底深线 → 用浅银金属 steel 色板
-        face_tone = tone
-        if style == "arknights" and tone == "silver" and polarity == "dark-on-light":
-            face_tone = "steel"
-        face = render_emblem(emblem_design, tone=face_tone, style=emblem_style,
-                             polarity=polarity, carve=carve)
-        compose_tone = face_tone if face_tone == "steel" else None
+        if style == "candy":
+            # 糖果章在下方分支自行把设计稿渲染成 subject_c，无需预渲染 face
+            face = None
+        else:
+            face_tone = tone
+            if style == "arknights" and tone == "silver" and polarity == "dark-on-light":
+                face_tone = "steel"
+            face = render_emblem(emblem_design, tone=face_tone, style=emblem_style,
+                                 polarity=polarity, carve=carve)
+            compose_tone = face_tone if face_tone == "steel" else None
     else:
         # ---- 输入感知：类型 / 透明通道 ----
         has_alpha, kind = analyze_input(src)
@@ -1307,28 +1381,43 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
             kind = "graphic"   # 自带透明底的几乎都是设计资产：保持锐利、不压纹理
 
         subject = None
-        if has_alpha:
+        matting_backend = "off"
+        if has_alpha or no_matting:
             subject = src.convert("RGBA")
-        elif no_matting:
-            subject = src.convert("RGBA")
+            matting_backend = "skipped"
         else:
-            subject, cov = extract_subject(src, tolerance=matting_tol)
-            if cov < 0.04 or cov > 0.96:
+            # 可选 AI 抠图后端（MEDAL_AI_MATTING=1 时启用）；失败回退经典算法
+            ai = ai_matting(src) if ai_matting_enabled() else None
+            if ai is not None:
+                subject = ai
+                cov = None
+                matting_backend = "ai"
+            else:
+                subject, cov = extract_subject(src, tolerance=matting_tol)
+                matting_backend = "classic"
+            if cov is not None and (cov < 0.04 or cov > 0.96):
                 if cov < 0:
                     warn = "[warn] 主体碎片化，已回退整图入章（圆角羽化融入）"
                 else:
                     warn = f"[warn] matting confidence low ({cov:.0%}), fallback to full image"
 
-        if kind == "photo" and not no_matting:
-            subject = flatten_texture(subject, strength=detail)
+        if style == "candy":
+            # 糖果章只吃主体 RGBA，不走蚀刻管线
+            eff_mode = "line"
+        else:
+            if kind == "photo" and not no_matting:
+                subject = flatten_texture(subject, strength=detail)
 
-        eff_mode = "line" if mode in ("auto", "emblem") else mode
-        face_tone = "silver" if tone == "stamp" else tone   # 印章仅纹章路径支持
-        face = etch_face(subject, tone=face_tone, line_strength=line_strength,
-                         detail=detail, mode=eff_mode)
-        if carve == "hand":
-            from emblem_render import carve_texture
-            face = carve_texture(face, "hand")
+            eff_mode = "line" if mode in ("auto", "emblem") else mode
+            if mode == "emblem":
+                warn = (warn + "\n" if warn else "") + \
+                    "[info] --mode emblem 未提供 --emblem-design，已回退 line 模式"
+            face_tone = "silver" if tone == "stamp" else tone   # 印章仅纹章路径支持
+            face = etch_face(subject, tone=face_tone, line_strength=line_strength,
+                             detail=detail, mode=eff_mode)
+            if carve == "hand":
+                from emblem_render import carve_texture
+                face = carve_texture(face, "hand")
 
     if style == "endfield":
         out = compose_endfield(face, text, subtitle, serial, tone, number)
@@ -1338,10 +1427,8 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
             from emblem_render import render_emblem
             subject_c = render_emblem(emblem_design, tone="candy", style="flat",
                                       polarity="none")
-        elif not has_alpha and not no_matting:
-            subject_c, _cov = extract_subject(src, tolerance=matting_tol)
         else:
-            subject_c = src.convert("RGBA")
+            subject_c = subject
         out = compose_candy(subject_c, text, subtitle, number)
     else:
         comp = ("gold" if tone == "gold" else
@@ -1354,15 +1441,47 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     out.save(output_path)
-    info = f"[info] input={kind} alpha={has_alpha} mode={eff_mode}"
+    info = f"[info] input={kind} alpha={has_alpha} mode={eff_mode} matting={matting_backend}"
     print(info, file=sys.stderr)
     return output_path, warn
 
 
+def _session_dir(root, project):
+    """迭代会话目录：<repo>/output/projects/<安全名>/。产物自动编号，支持"上一轮改一改"。"""
+    import re as _re
+    safe = _re.sub(r"[^\w\-]+", "_", project).strip("_") or "default"
+    d = os.path.join(os.path.dirname(root), "output", "projects", safe)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _archive_round(proj_dir, n, style, tone, args, warn, design_path=None):
+    """把本轮参数/告警/设计稿归档进会话目录（n 由调用方在生成 PNG 前算好，保证一致）。"""
+    import json as _json
+    import time as _time
+    from shutil import copyfile
+    tag = f"round{n:02d}"
+    meta = {"round": n, "time": _time.strftime("%Y-%m-%d %H:%M:%S"),
+            "style": style, "tone": tone, "text": args.text, "subtitle": args.subtitle,
+            "serial": args.serial, "number": args.number, "mode": args.mode,
+            "line_strength": args.line_strength, "detail": args.detail,
+            "matting_tol": args.matting_tol, "polarity": args.polarity,
+            "carve": args.carve, "input": args.input, "warn": warn}
+    with open(os.path.join(proj_dir, f"{tag}.params.json"), "w", encoding="utf-8") as f:
+        _json.dump(meta, f, ensure_ascii=False, indent=2)
+    if design_path and os.path.isfile(design_path):
+        copyfile(design_path, os.path.join(proj_dir, f"{tag}.design.json"))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="照片 -> 明日方舟/终末地风格蚀刻章")
-    ap.add_argument("input")
+    ap.add_argument("input", nargs="?", default=None)
     ap.add_argument("-o", "--output", default=None)
+    ap.add_argument("--list-types", action="store_true",
+                    help="列出全部章种（style × tone × 模式）后退出")
+    ap.add_argument("--project", default=None,
+                    help="迭代会话项目名：产物归档到 output/projects/<名>/ 自动编号，"
+                         "便于追溯与二次修改（含每轮参数/告警/设计稿快照）")
     ap.add_argument("--style", choices=["arknights", "endfield", "candy"], default="arknights")
     ap.add_argument("--tone", default=None,
                     help="方舟: silver(普通)|plated(镀层)|gold(活动金章)；终末地: silver(银)|gold(金)|iridescent(炫彩)")
@@ -1388,15 +1507,38 @@ def main(argv=None):
                     help="刻痕质感：machine 机器刻 | hand 手工金石味")
     args = ap.parse_args(argv)
 
+    if args.list_types:
+        from medal_types import list_types
+        print(list_types())
+        return 0
+    if not args.input:
+        ap.error("缺少输入图片路径（或使用 --list-types 查看章种）")
+
     root = os.path.dirname(os.path.abspath(__file__))
-    out = args.output or os.path.join(
-        os.path.dirname(root), "output",
-        os.path.splitext(os.path.basename(args.input))[0] + f"_{args.style}.png")
+    proj_dir = _session_dir(root, args.project) if args.project else None
+    round_no = None
+    out = args.output
+    if out is None:
+        if proj_dir:
+            round_no = 1 + len([f for f in os.listdir(proj_dir)
+                                if f.startswith("round") and f.endswith(".png")])
+            out = os.path.join(proj_dir,
+                               f"round{round_no:02d}_{args.style}_{args.tone or 'default'}.png")
+        else:
+            out = os.path.join(
+                os.path.dirname(root), "output",
+                os.path.splitext(os.path.basename(args.input))[0] + f"_{args.style}.png")
     path, warn = generate(args.input, out, args.style, args.tone, args.text,
                           args.subtitle, args.serial, args.no_matting,
                           args.line_strength, args.detail, args.matting_tol,
                           args.number, args.mode, args.emblem_design,
                           args.emblem_style, args.polarity, args.carve)
+    if proj_dir:
+        if round_no is None:
+            round_no = 1 + len([f for f in os.listdir(proj_dir)
+                                if f.startswith("round") and f.endswith(".png")])
+        _archive_round(proj_dir, round_no, args.style, args.tone, args, warn,
+                       design_path=args.emblem_design)
     if warn:
         print(warn, file=sys.stderr)
     print(path)
