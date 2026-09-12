@@ -11,7 +11,7 @@
 ## 项目边界
 
 - 不是官方素材导出器：引擎把输入「转译」为风格化纹章，不逐字临摹官方美术资源。
-- 全程本地：照片在本机处理；网页工具仅在浏览器内加载 AI 抠图模型（`@imgly/background-removal`），失败自动降级内置算法，照片不上传。
+- 默认全程本地：照片在本机处理；网页工具加载入库的浏览器内 AI 抠图模型（`@imgly/background-removal`，随仓库分发给 `web/vendor/`；版本锁定的公共 CDN 仅作回退），失败自动降级内置算法，照片不上传。唯一例外是可选的 `engine/design_emblem.py` 适配器：它会把照片压缩后发送到你配置的视觉 API 端点（默认 api.openai.com），请仅对可信端点使用。
 - 仅限二创：输出为风格演绎，请勿商用或暗示官方背书。
 
 ## 项目组成
@@ -25,6 +25,7 @@
 | `engine/batch_test.py` / `engine/gen_designs.py` | 真实照片压测工装 / 程序化纹章设计稿生成器 |
 | `web/index.html` | 单文件网页工具（拖拽/调参/下载）——当前为早期模板版本，新版模板（终末地重做 + 糖果风）移植中 |
 | `PROMPTS.md` | 自包含操作手册：设计提示词模板、质检清单、参数速查 |
+| `NANO_PROMPTS.md` | 自包含起手文档：一句话 → Google nano banana 可用的生图提示词（无需引擎） |
 | `PORTING.md` | 移植计划（技术方向规划，实施时间未定） |
 | `reference/` | 考据抓取脚本（可再生成研究素材）+ `DESIGN_SPEC.md`（考据结论） |
 | `samples/` | 测试素材 |
@@ -129,13 +130,46 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
    pip install -r requirements.txt     # requirements 变化时重跑
    # 更新已安装的 skill（重拷运行时子集）：
    Copy-Item -Recurse -Force `
-     <repo>\SKILL.md, <repo>\PROMPTS.md, <repo>\engine, <repo>\web `
+     <repo>\SKILL.md, <repo>\PROMPTS.md, <repo>\NANO_PROMPTS.md, <repo>\engine, <repo>\web, <repo>\references `
      "$env:USERPROFILE\.agents\skills\arknights-medal-designer"
    # 卸载 skill：
    Remove-Item -Recurse -Force "$env:USERPROFILE\.agents\skills\arknights-medal-designer"
    ```
 
    `reference/` 下的抓取脚本仅供研究，会下载第三方考据素材，日常使用不需要它们。切勿提交或传播经它处理的他人照片。
+
+### 全本地模式（本地视觉模型 + 本地抠图）
+
+全流程可以零云端 API 运行。路径全部由环境变量驱动——随时挪动模型目录，只需改环境变量，代码不写死任何位置。
+
+1. **本地视觉模型**（无云端往返地产出设计稿 JSON）。便携安装 Ollama 到任意位置，`OLLAMA_MODELS` 指向模型目录后拉取视觉模型：
+
+   ```powershell
+   $env:OLLAMA_MODELS='D:\ollama_models'          # 任意目录，可自由挪动
+   ollama pull qwen2.5vl:7b                       # ~6 GB；3B 档也可用
+   ollama serve                                   # 127.0.0.1:11434 提供 OpenAI 兼容 API
+   ```
+
+   再把设计适配器指向本机回环端点：
+
+   ```powershell
+   $env:OPENAI_BASE_URL='http://127.0.0.1:11434/v1'   # 本机回环 http 明确放行
+   $env:OPENAI_MODEL='qwen2.5vl:7b'
+   python engine/design_emblem.py photo.jpg -o design.json --render out.png
+   ```
+
+2. **本地 AI 抠图（CLI）**——复杂背景下的主体提取优于经典算法。需 `pip install onnxruntime` 与一个 U²-Net 族模型：
+
+   ```powershell
+   $env:MEDAL_AI_MATTING='1'
+   $env:MEDAL_MATTING_MODEL='D:\medal_models\silueta.onnx'   # 任意位置
+   ```
+
+   不可用或失败时引擎静默回退经典抠图。
+
+3. 网页工具的抠图模型在浏览器内加载本地 vendor 副本（CDN 仅作回退）。
+
+用 `--list-types` 查看全部章种目录（style × tone × 模式）。
 
 ## 参数速查
 
@@ -161,6 +195,8 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
 
 - 经典抠图对「主体清晰 + 背景简洁」效果最好；低置信自动整图回退（圆角羽化）并提示。
 - 网页工具仍是早期模板版本；新版模板（终末地重做 + 糖果风）尚未移植。
+- 网页工具优先加载 `web/vendor/` 内的抠图模型副本；版本锁定的公共 CDN（esm.sh / jsDelivr / unpkg）仅在副本缺失时回退。
+- 超过 80MP 的输入会被直接拒绝（解压炸弹防护）；网页端输入会先降到 4096px 再处理。
 - 字体以 Windows 系统字体为主，mac/Linux 回退计划中（见 `PORTING.md`）。
 
 ## Roadmap
@@ -173,6 +209,7 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
 ## 更多文档
 
 - [PROMPTS.md](PROMPTS.md) —— 操作手册与质检清单
+- [NANO_PROMPTS.md](NANO_PROMPTS.md) —— 一句话 → nano banana 生图提示词起手文档
 - [SKILL.md](SKILL.md) —— skill 定义
 - [PORTING.md](PORTING.md) —— 移植计划
 - [reference/DESIGN_SPEC.md](reference/DESIGN_SPEC.md) —— 考据结论
