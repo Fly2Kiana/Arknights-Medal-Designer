@@ -421,7 +421,7 @@ function applyGrain(canvas,seed,amp){
 /* ---------------- 蚀刻纹章化（对齐引擎 v16 line 公式 + 整图回退美化） ---------------- */
 // 回退支自动色阶的章面明度跨度门限（灰阶），与引擎 FALLBACK_POLISH_SPAN_MIN 同值：
 // 章面自己没拉开时（纯色/雾天输入只剩排线的 0.1~8 灰阶）自动色阶 = 42 倍增益，
-// 会把不可见的排线刻成满章深线。门限由本包 samples/ 与 reference/ 的实测间隙定出，非手写常量。
+// 会把不可见的排线刻成满章深线。门限由平坦类与细节类输入的章面灰阶跨度间隙定出，非手写常量（量测脚本未随本包发布）。
 // 网页 etchFace() 只有 line 一档（无 mode 参数），故这里等价于引擎的 `mode!=="line" ||` 前置。
 const FALLBACK_POLISH_SPAN_MIN = 17;
 const PALETTES = {
@@ -1272,7 +1272,7 @@ function composeEndfield(canvas, face, number, serial, toneRaw, fam='story') {
   }else{
   const plate_w=168, plate_h=82, top_y=cy-R+58;
   roundedRect(ctx,cx-plate_w/2,top_y,plate_w,plate_h,14);
-  // 面板这块区域的电平走实测 `d_ref`（判据 L-4′）：素材判 `flat` ⇒ 与周围金属齐平，只画框不填色
+  // 面板这块区域的电平走实测 `d_ref`（极性判定）：素材判 `flat` ⇒ 与周围金属齐平，只画框不填色
   if(LM.plateLift!=null){
     ctx.fillStyle=rgba(f_mid.map(v=>Math.round(v*(1+LM.plateLift))),LG.plate.fillAlpha);
     ctx.fill();

@@ -1548,7 +1548,7 @@
    "ef_silver→collection/silver": "银档无 showcase 样本（0 枚）",
    "showcase/gold→ef_gold": "陈列大图镀彩金"
   },
-  "caliber": "lum=rgb.max(2)；ratio/delta 一律相对同枚章面 (zone & ~guard)，ratio_vs_zone 另给 H1 纯 zone 分母；edge=alpha&~inner（描边环）；plate/corner/lowdot 收 rho<=0.93 且排纹章领地，笔画判据 |resid|>0.05（装饰层用绝对档）；反差 c_dark/c_light = 过线像元 lum − 同 bin 底电平（resid 中位 r_dark/r_light 只作参考，它被 k=61 局部底压扁）；铭牌面板另用 plate−plate_ref 去打光梯度",
+  "caliber": "lum=rgb.max(2)；ratio/delta 一律相对同枚章面 (zone & ~guard)，ratio_vs_zone 另给不含描边的纯章面分母；edge=alpha&~inner（描边环）；plate/corner/lowdot 收 rho<=0.93 且排纹章领地，笔画阈值 |resid|>0.05（装饰层用绝对档）；反差 c_dark/c_light = 过线像元 lum − 同 bin 底电平（resid 中位 r_dark/r_light 只作参考，它被 k=61 局部底压扁）；铭牌面板另用 plate−plate_ref 去打光梯度",
   "caveats": [
    "collection/dark/plate: 仪器不可见（过线枚占比 暗 0%/亮 0%，笔画占比中位 0.4%） ⇒ 该层该组保持现常数",
    "collection/dark/corner: 枚间不一致-不可单常数化（过线枚占比 暗 36%/亮 27%，笔画占比中位 4.9%） ⇒ 该层该组保持现常数",
@@ -1562,13 +1562,13 @@
    "showcase/pearl/plate: 枚间不一致-不可单常数化（过线枚占比 暗 30%/亮 0%，笔画占比中位 0.1%） ⇒ 该层该组保持现常数"
   ],
   "contra": 0.08,
-  "emit_cmd": "由 reference/ 素材程序化采样生成（量测脚本未随本包发布）",
+  "emit_cmd": "程序化采样自终末地游戏内截图（截图与量测脚本未随本包发布）",
   "field_k": 61,
   "instrument_constants": {
    "c_dark_compression": "种 −0.12 的笔画反差量回 −0.098（k=61 局部底吸走 2px一阶的量）；种 −0.20 量回 −0.212 ⇒ 反差越大越准",
    "d_ref_null_reading": "面板**没提亮**的人造章上 d_ref 读 +0.016 ⇒ 素材侧|d_ref| ≤ 0.02 只能判「齐平」，不得读成「略亮」",
    "edge_min_resolvable_width_px": "描边窄于腐蚀核（3+R//120 = 6px @R=470）时比值偏亮：种 5.5px 读 0.781、种 ≥11px 收敛到0.764（真值 0.75）",
-   "edge_ratio_denominator": "L-1 用 ratio_vs_face（分母排掉纹章领地）。人造章上含纹章的 zone 分母把描边比抬高 +0.040（0.764 → 0.804，`--selftest` E 段末两列）"
+   "edge_ratio_denominator": "描边比用 ratio_vs_face（分母排掉纹章领地）。人造章上含纹章的 zone 分母把描边比抬高 +0.040（0.764 → 0.804，已知答案自测报表末两列）"
   },
   "min_mark_share": 0.005,
   "min_ok_share": 0.6,
@@ -1583,7 +1583,7 @@
    "154413": "showcase-B",
    "154426": "showcase-C"
   },
-  "plate_fill_rule": "面板这块区域的电平走 d_ref（plate − 同高两侧金属参照），不走笔画票：d_ref_verdict == 'lift' 才提亮，'flat' 一律与周围金属齐平（计划 §2.1-c / §3.3）",
+  "plate_fill_rule": "面板这块区域的电平走 d_ref（plate − 同高两侧金属参照），不走笔画票：d_ref_verdict == 'lift' 才提亮，'flat' 一律与周围金属齐平",
   "render_tone": {
    "bronze": "collection/dark",
    "dark": "collection/dark",
@@ -1594,11 +1594,11 @@
    "silver": "collection/silver"
   },
   "rho_max": 0.93,
-  "ruler_cmd": "尺子的分带与逐页报表（量测脚本未随本包发布）",
+  "ruler_cmd": "分带与逐页报表由量测脚本给出（脚本未随本包发布）",
   "selftest_cmd": "已知答案自测：真值种进人造章（量测脚本未随本包发布）",
-  "selftest_gate": "判据 L-0 ④ 已知答案对照（真值种进人造章）；--emit 必须先全过才写盘。它同时给出本尺的三条仪器常数 ↓",
+  "selftest_gate": "已知答案对照（真值种进人造章）：--emit 必须先全过才写盘。它同时给出量测仪器的三条常数 ↓",
   "t_stroke": 0.05,
   "target_r": 470.0,
-  "verdict_rule": "L-4′：单向 ≥25px 且 ≥0.5% 该 bin 且 |c| ≥ 0.08，组内 ≥60% 枚过线 → 该向单常数化（feed_rgb 给该向笔画色）；两向都过=dual-不可单常数化；过线枚占比>0 但两向都不到 60%=枚间不一致-不可单常数化；两向过线枚数全为 0=仪器不可见。后三类 feed_rgb=null，引擎保持现值"
+  "verdict_rule": "判定规则：单向 ≥25px 且 ≥0.5% 该 bin 且 |c| ≥ 0.08，组内 ≥60% 枚过线 → 该向单常数化（feed_rgb 给该向笔画色）；两向都过=dual-不可单常数化；过线枚占比>0 但两向都不到 60%=枚间不一致-不可单常数化；两向过线枚数全为 0=仪器不可见。后三类 feed_rgb=null，引擎保持现值"
  }
 }

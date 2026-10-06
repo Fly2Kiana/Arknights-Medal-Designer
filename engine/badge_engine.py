@@ -28,7 +28,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ef_layer_geom import CORNER_SIZE as EF_CORNER_SIZE  # noqa: E402
-from ef_layer_geom import PLATE as EF_PLATE  # 装饰层落笔几何单一事实源（引擎与量测器共用同一张表）
+from ef_layer_geom import PLATE as EF_PLATE  # 装饰层落笔几何单一事实源（渲染与复测共用同一张表）
 from ef_layer_geom import corner_origins as _ef_corner_origins  # noqa: E402
 
 # ----------------------------------------------------------------------------
@@ -411,9 +411,9 @@ def _luma_span(img):
     return float(luma.max() - luma.min())
 
 
-# 回退支自动色阶的跨度门限（灰阶）。实测：平坦类夹具（纯色/雾天）章面跨度 3.9~8.0，
+# 回退支自动色阶的跨度门限（灰阶）。实测：平坦类输入（纯色/雾天）章面跨度 3.9~8.0，
 # 真实照片输入 36.2~107.5，官方章面跨度 p1 锚 162.2 —— 取平坦间隙几何平均并受 p1 封顶。
-# 复现口径：对本包 samples/ 与 reference/ 逐输入量章面灰阶跨度即可复现，非手写常量
+# 口径：门限取自平坦类与细节类输入的章面灰阶跨度之间那道间隙（量测脚本未随本包发布），非手写常量
 FALLBACK_POLISH_SPAN_MIN = 17.0
 
 
@@ -537,7 +537,7 @@ def etch_face(rgba, tone="silver", line_strength=1.0, detail=1.0, face_px=520,
     # 跨度门限只判 line 档。根本理由：A1 的病料是「引擎自己的排线」，而 `_hatch()` 只在
     # line 支被调用 ⇒ 其余档没有可被刻深的线；实测理由：门限一并管到别的档时，
     # 83 张全矩阵 A/B 出现一张真照片差分行（landscape/ef_gold/silhouette）—— silhouette
-    # 的平涂是设计意图，不该被当成"输入没信息"而关掉抛光。E-④ 的间隙本来就只在 line 支
+    # 的平涂是设计意图，不该被当成"输入没信息"而关掉抛光。这道间隙本来就只在 line 支
     # 量过（网页侧 shadow_face 逐行复刻的就是引擎这条回退支）。
     span_ok = mode != "line" or _luma_span(face) >= FALLBACK_POLISH_SPAN_MIN
     if a_min > 200 and span_ok:
@@ -600,7 +600,7 @@ def _halftone_tile(period=7, dot=1.4, color=(0, 0, 0), alpha=30, offset=True, ss
     `ss`>1：按 ss× 超采样画圆再 `Image.BOX` 面积均缩回，占空比 = 声明值
     π·dot²/period²。默认 1 保持旧画法（方舟/糖果侧渲染字节不变）。旧画法在 dot 小
     于一个像元量级时不可信：`period=5, dot=1.6` 声明 32.2% 占空、Pillow 实画 **84.0%**
-    ⇒「网点」变成「整片暗膜上留针孔」，见计划 §2.1-i。
+    ⇒「网点」变成「整片暗膜上留针孔」。
     """
     s = period
     if ss > 1:
@@ -927,7 +927,7 @@ def compose_arknights(face, text, subtitle="", serial="", tone="silver",
 
 
 # ----------------------------------------------------------------------------
-# 四、终末地模板 v11（依据 2026-09 游戏内截图考据，DESIGN_SPEC v2 §七：
+# 四、终末地模板 v11（依据 2026-09 游戏内截图考据，与随包发布的设计说明一致：
 #     品阶 = 银/金/深灰排名/虹彩珠光镀层；形制家族 = story 剧情陈列 / combat 计数；
 #     共通元素：角部工程注记、顶部铭牌框、底部接口触点、网点渐隐、拉丝渐变）
 # ----------------------------------------------------------------------------
@@ -936,7 +936,7 @@ def compose_arknights(face, text, subtitle="", serial="", tone="silver",
 EF_TONE_V2 = {  # 色值取自 2026-09 游戏内截图程序化采样（见 MATERIAL_INDEX）
     "ef_silver": {  # 停点取自 2026-09 的色场采样（旧 v2 深冷灰档 lum≈80）。
                    # 装饰四层（描边/网点/角部注记/铭牌面板）**不再**由这三个停点线性派生，
-                   # 改读 ef_layer_measured.json 的实测色（判据 L-0 ④ 自证过）；
+                   # 改读 ef_layer_measured.json 的实测色（已知答案自测核过）；
                    # 现在它们只驱动章面底色场与 `_metal_ramp` 兜底路径。
         "field": [(70, 74, 78), (94, 96, 97), (52, 58, 62)],
         "band": (190, 194, 198),
@@ -1018,7 +1018,7 @@ _EF_LAYERS = None
 
 
 def _ef_layers():
-    """装饰四层实测色（engine/ef_layer_measured.json，由 reference/ 素材程序化采样得到）
+    """装饰四层实测色（engine/ef_layer_measured.json，程序化采样自终末地游戏内截图）
 
     缺品阶/缺组/缺层一律 raise：兜底默认值会把「漏登记」变成静默错档。
     """
@@ -1031,7 +1031,7 @@ def _ef_layers():
 
 
 def _ef_group(tone):
-    """该品阶借用的素材组（`meta.render_tone`，与量测器 `--check` 同一张表）"""
+    """该品阶借用的素材组（`meta.render_tone`，与渲染侧同一张表）"""
     L = _ef_layers()
     key = tone[3:] if tone.startswith("ef_") else tone
     grp = L["meta"]["render_tone"].get(key)
@@ -1040,7 +1040,7 @@ def _ef_group(tone):
     return L["groups"][grp]
 
 
-_EF_FEED_LAYERS = ("plate", "corner", "lowdot")   # 这三层按判据 L-4′ 的判定决定喂不喂
+_EF_FEED_LAYERS = ("plate", "corner", "lowdot")   # 这三层按实测的极性判定决定喂不喂
 
 
 def _ef_fed(tone, layer):
@@ -1057,14 +1057,14 @@ def _ef_fed(tone, layer):
 
 
 def _ef_measured(tone, layer, fallback=None):
-    """一层实测色的绝对 RGB；`_ef_fed` 为 None 时返回 fallback（计划 §3.3）"""
+    """一层实测色的绝对 RGB；`_ef_fed` 为 None 时返回 fallback（该组未照实喂色）"""
     return _ef_fed(tone, layer) or fallback
 
 
 def _ef_plate_lift(tone):
     """铭牌面板**这块区域**的去梯度电平（plate − 同高两侧金属）。
 
-    素材 6 组里 5 组判 `flat`（|d_ref| 落进尺子的空读数 +0.016 内，计划 §6.1）⇒ 返回
+    素材 6 组里 5 组判 `flat`（|d_ref| 落进已知答案自测读出的空读数 +0.016 内）⇒ 返回
     None = 面板与周围金属齐平，不许提亮；只有 `lift` 才返回偏移量。
     """
     p = _ef_group(tone)["plate"]
@@ -1135,16 +1135,16 @@ def _ef_industry_hardware(d, cx, cy, R, outline, engrave, tp):
 
 def _ef_nameplate(d, cx, cy, R, outline, field_mid, tone="ef_gold_pure"):
     """顶部铭牌框 v2：车牌式圆角矩形 + 四角铆钉 + 顶点空心三角指示
-    几何按素材实测（154413/153659 放大 3 倍测量，×2.9 映射到 R=470 画布）：
+    几何按素材实测（两张游戏内陈列大图放大 3 倍测量，×2.9 映射到 R=470 画布）：
     板宽 ≈ 0.21×章宽(168px)、高 ≈ 99px、板顶距顶点 ≈ 72px、描边 ≈ 6px、
     四角铆钉空心小圆 r≈8、空心三角宽 30×高 42 于顶点。
     **落笔坐标取自 `engine/ef_layer_geom.py` 的 `PLATE`（单一事实源）**：
-    量测器要按同一张表算「笔画有没有活进验收 bin」，写死在这里就会两边各说各话。"""
+    复测要按同一张表算「笔画有没有落进对应分带」，写死在这里就会两边各说各话。"""
     p = EF_PLATE
     x0, y0, x1, y1 = cx + p["dx0"], cy + p["dy0"], cx + p["dx1"], cy + p["dy1"]
     # 面板**这块区域**的电平走实测 `d_ref`（plate − 同高两侧金属，去打光梯度）：素材 6 组
     # 里 5 组判 `flat` ⇒ 只画框和铆钉、不填色（旧值 `field_mid+(60,)` 与奶油色 (244,236,200)
-    # 都是手设提亮，无素材依据）。面板里的刻字另走 L-4′，六组全是不可单常数化 ⇒ 保持现值。
+    # 都是手设提亮，无素材依据）。面板里的刻字另走同一套笔画判定，六组全是不可单常数化 ⇒ 保持现值。
     lift = _ef_plate_lift(tone)
     d.rounded_rectangle([x0, y0, x1, y1], radius=p["radius"],
                         fill=None if lift is None
@@ -1219,9 +1219,9 @@ def compose_endfield(face, text="", subtitle="", serial="", tone="ef_silver",
         canvas.paste(ramp, (0, 0), hex_mask)
 
     # ---- 底部网点渐隐（章面下缘特征）----
-    # 实测的 `feed_rgb` 就是素材网点**笔画像元**自己的电平（判据 L-4′ 极性判定后的暗/亮
+    # 实测的 `feed_rgb` 就是素材网点**笔画像元**自己的电平（极性判定后的暗/亮
     # 元中位色），所以照实喂时必须满不透明；旧常数 alpha=90 会把笔画朝底色场稀释掉
-    # ~2/3，量测器在 lowdot bin 里连样本都取不到（§2.1-i）。未照实喂的组保持 90。
+    # ~2/3，复测在 lowdot 分带里连样本都取不到。未照实喂的组保持 90。
     # `ss=8` 是同一个坑的另一半：不超采样时画出来的不是 32% 网点而是 84% 暗膜。
     dot_measured = _ef_fed(tone, "lowdot")
     dot = _halftone_tile(period=5, dot=1.6, ss=8,
@@ -1229,7 +1229,7 @@ def compose_endfield(face, text="", subtitle="", serial="", tone="ef_silver",
                          alpha=255 if dot_measured else 90, offset=False)
     fade = Image.new("L", (CW, CH), 0)
     fd = ImageDraw.Draw(fade)
-    # 190 仍是**未实测**常数，但 V-④ 量过它值不值得抬：可算的子带里「要压到素材那个压暗比
+    # 190 仍是**未实测**常数，但实测过它值不值得抬：可算的子带里「要压到素材那个压暗比
     # 所需的不透明度」全部 ≥1.0（对渲染件逐格量「刻得出所需不透明度」的占比）
     # ⇒ 坡道抬满到 255 也到不了素材，真瓶颈在点色与网点占空，不在这条坡道上。
     for yy in range(int(cy + apothem * 0.45), int(cy + apothem)):
@@ -1263,9 +1263,9 @@ def compose_endfield(face, text="", subtitle="", serial="", tone="ef_silver",
 
     # ---- 描边：贴着章体边缘向内的**实心带**，不是居中在边界上的细线 ----
     # 旧写法 `polygon(_hex_pts(R), width=5)` 的线宽是**居中**在路径上的（跨 R±2.5），
-    # 而末尾 keep_mask 按 R-3 裁 ⇒ 垂直于边只剩 2.7px；量测器的 `edge` bin 却是
-    # 「边缘向内 3+R//120 = 6px」，于是 6px 里 3.3px 仍是色场，判据 L-1 读不回实测电平
-    # （5 组里 4 组 |Δ| 0.102~0.255，见计划 §2.1-h）。带子按同一个 6px 口径画，多 1px
+    # 而末尾 keep_mask 按 R-3 裁 ⇒ 垂直于边只剩 2.7px；复测的 `edge` 分带却是
+    # 「边缘向内 3+R//120 = 6px」，于是 6px 里 3.3px 仍是色场，复测读不回实测电平
+    # （5 组里 4 组 |Δ| 0.102~0.255）。带子按同一个 6px 口径画，多 1px
     # 余量给章体边界的抗锯齿。
     band_w = 3 + R // 120 + 1
     edge_band = Image.new("L", (CW, CH), 0)
@@ -1331,7 +1331,7 @@ def compose_endfield(face, text="", subtitle="", serial="", tone="ef_silver",
     else:
         _ef_nameplate(d, cx, cy, R, outline_c, f_mid, tone)
     # 四条注记的落点取自实测带（`ef_layer_geom.CORNER`，素材角部注记暗元 u/v 分位）：
-    # 旧坐标有 3 条画在章体外被裁掉、第 4 条在章内但在验收 bin 外（存活率全 0.000）。
+    # 旧坐标有 3 条画在章体外被裁掉、第 4 条在章内但落在实测带外（存活率全 0.000）。
     for x, y, s in _ef_corner_origins(cx, cy, R):
         _ef_corner_annotation(d, x, y, s, corner_c, EF_CORNER_SIZE)
 
@@ -1383,9 +1383,9 @@ def compose_endfield(face, text="", subtitle="", serial="", tone="ef_silver",
     noisy = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
     # 章体剪影一律硬边正六边形。不能用 `canvas.getchannel("A")`：ImageDraw 画半透明笔画时
     # 是把 fill 的 alpha **写进** alpha 通道（不是叠加），内发丝线 (…,110) 因此在 R-16 处
-    # 留下一条 <127 的「假透明缝」⇒ alpha 被切成外环 + 本体两块，量测器 `alpha>127` 口径下
+    # 留下一条 <127 的「假透明缝」⇒ alpha 被切成外环 + 本体两块，复测 `alpha>127` 口径下
     # 的 `edge` bin 从 6px 变成 14px（逐次腐蚀前 6 圈各吃掉 7~9k 像元，本体周边只有 2.9k），
-    # 于是描边电平永远读不回来（计划 §2.1-h）。
+    # 于是描边电平永远读不回来。
     noisy.putalpha(keep_mask)
     return noisy
 
@@ -1810,7 +1810,7 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
                 subject = flatten_texture(subject, strength=detail)
 
             if style == "endfield" and mode == "auto":
-                mode = "silhouette"   # 素材纹章为扁平实心形（DESIGN_SPEC v2 §7.3）
+                mode = "silhouette"   # 素材纹章为扁平实心形（2026-09 截图考据）
             eff_mode = "line" if mode in ("auto", "emblem") else mode
             if mode == "emblem":
                 warn = (warn + "\n" if warn else "") + \
@@ -1851,7 +1851,7 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
 
 
 def _session_dir(root, project):
-    """迭代会话目录：<repo>/output/projects/<安全名>/。产物自动编号，支持"上一轮改一改"。"""
+    """迭代会话目录：<repo>/output/projects/<安全名>/。产物自动编号，支持"反复迭代"。"""
     import re as _re
     safe = _re.sub(r"[^\w\-]+", "_", project).strip("_") or "default"
     d = os.path.join(os.path.dirname(root), "output", "projects", safe)
@@ -1860,7 +1860,7 @@ def _session_dir(root, project):
 
 
 def _archive_round(proj_dir, n, style, tone, args, warn, design_path=None):
-    """把本轮参数/告警/设计稿归档进会话目录（n 由调用方在生成 PNG 前算好，保证一致）。"""
+    """把这次生成的参数/告警/设计稿归档进会话目录（n 由调用方在生成 PNG 前算好，保证一致）。"""
     import json as _json
     import time as _time
     from shutil import copyfile

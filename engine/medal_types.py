@@ -6,7 +6,7 @@
 - skill 与文档引用同一份事实源，避免文档与实现漂移。
 
 新增章种：在此登记（视觉参数的 JSON 模板化见 docs/ROADMAP.md L1 后续项）。
-视觉考据依据 reference/DESIGN_SPEC.md。
+视觉考据依据 reference/ 目录里随本包发布的设计说明。
 """
 
 MEDAL_TYPES = [
