@@ -1548,7 +1548,7 @@
    "ef_silver→collection/silver": "银档无 showcase 样本（0 枚）",
    "showcase/gold→ef_gold": "陈列大图镀彩金"
   },
-  "caliber": "lum=rgb.max(2)；ratio/delta 一律相对同枚章面 (zone & ~guard)，ratio_vs_zone 另给 H1 纯 zone 分母；edge=alpha&~inner（描边环）；plate/corner/lowdot 收 rho<=0.93 且排纹章领地，笔画判据 |resid|>0.05（装饰层用绝对档，纪律 ⑪）；反差 c_dark/c_light = 过线像元 lum − 同 bin 底电平（resid 中位 r_dark/r_light 只作参考，它被 k=61 局部底压扁）；铭牌面板另用 plate−plate_ref 去打光梯度",
+  "caliber": "lum=rgb.max(2)；ratio/delta 一律相对同枚章面 (zone & ~guard)，ratio_vs_zone 另给 H1 纯 zone 分母；edge=alpha&~inner（描边环）；plate/corner/lowdot 收 rho<=0.93 且排纹章领地，笔画判据 |resid|>0.05（装饰层用绝对档）；反差 c_dark/c_light = 过线像元 lum − 同 bin 底电平（resid 中位 r_dark/r_light 只作参考，它被 k=61 局部底压扁）；铭牌面板另用 plate−plate_ref 去打光梯度",
   "caveats": [
    "collection/dark/plate: 仪器不可见（过线枚占比 暗 0%/亮 0%，笔画占比中位 0.4%） ⇒ 该层该组保持现常数",
    "collection/dark/corner: 枚间不一致-不可单常数化（过线枚占比 暗 36%/亮 27%，笔画占比中位 4.9%） ⇒ 该层该组保持现常数",
@@ -1562,7 +1562,7 @@
    "showcase/pearl/plate: 枚间不一致-不可单常数化（过线枚占比 暗 30%/亮 0%，笔画占比中位 0.1%） ⇒ 该层该组保持现常数"
   ],
   "contra": 0.08,
-  "emit_cmd": "python engine/measure_legacy_layers.py --emit",
+  "emit_cmd": "由 reference/ 素材程序化采样生成（量测脚本未随本包发布）",
   "field_k": 61,
   "instrument_constants": {
    "c_dark_compression": "种 −0.12 的笔画反差量回 −0.098（k=61 局部底吸走 2px一阶的量）；种 −0.20 量回 −0.212 ⇒ 反差越大越准",
@@ -1594,8 +1594,8 @@
    "silver": "collection/silver"
   },
   "rho_max": 0.93,
-  "ruler_cmd": "python engine/measure_legacy_layers.py --report --by-page",
-  "selftest_cmd": "python engine/measure_legacy_layers.py --selftest",
+  "ruler_cmd": "尺子的分带与逐页报表（量测脚本未随本包发布）",
+  "selftest_cmd": "已知答案自测：真值种进人造章（量测脚本未随本包发布）",
   "selftest_gate": "判据 L-0 ④ 已知答案对照（真值种进人造章）；--emit 必须先全过才写盘。它同时给出本尺的三条仪器常数 ↓",
   "t_stroke": 0.05,
   "target_r": 470.0,

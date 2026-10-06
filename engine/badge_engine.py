@@ -28,7 +28,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ef_layer_geom import CORNER_SIZE as EF_CORNER_SIZE  # noqa: E402
-from ef_layer_geom import PLATE as EF_PLATE  # 装饰层落笔几何单一事实源（纪律 ⑬）
+from ef_layer_geom import PLATE as EF_PLATE  # 装饰层落笔几何单一事实源（引擎与量测器共用同一张表）
 from ef_layer_geom import corner_origins as _ef_corner_origins  # noqa: E402
 
 # ----------------------------------------------------------------------------
@@ -413,7 +413,7 @@ def _luma_span(img):
 
 # 回退支自动色阶的跨度门限（灰阶）。实测：平坦类夹具（纯色/雾天）章面跨度 3.9~8.0，
 # 真实照片输入 36.2~107.5，官方章面跨度 p1 锚 162.2 —— 取平坦间隙几何平均并受 p1 封顶。
-# 复现命令：python engine/measure_content_gain.py
+# 复现口径：对本包 samples/ 与 reference/ 逐输入量章面灰阶跨度即可复现，非手写常量
 FALLBACK_POLISH_SPAN_MIN = 17.0
 
 
@@ -538,7 +538,7 @@ def etch_face(rgba, tone="silver", line_strength=1.0, detail=1.0, face_px=520,
     # line 支被调用 ⇒ 其余档没有可被刻深的线；实测理由：门限一并管到别的档时，
     # 83 张全矩阵 A/B 出现一张真照片差分行（landscape/ef_gold/silhouette）—— silhouette
     # 的平涂是设计意图，不该被当成"输入没信息"而关掉抛光。E-④ 的间隙本来就只在 line 支
-    # 量过（measure_content_gain.py 的 shadow_face 逐行复刻的就是它）。
+    # 量过（网页侧 shadow_face 逐行复刻的就是引擎这条回退支）。
     span_ok = mode != "line" or _luma_span(face) >= FALLBACK_POLISH_SPAN_MIN
     if a_min > 200 and span_ok:
         # 回退整图的对比度修复：自动色阶 + 对比增强（实战反馈：回退图普遍过淡发灰）
@@ -1018,9 +1018,9 @@ _EF_LAYERS = None
 
 
 def _ef_layers():
-    """装饰四层实测色（engine/ef_layer_measured.json，`measure_legacy_layers.py --emit` 生成）
+    """装饰四层实测色（engine/ef_layer_measured.json，由 reference/ 素材程序化采样得到）
 
-    缺品阶/缺组/缺层一律 raise：兜底默认值会把「漏登记」变成静默错档（纪律 ⑨）。
+    缺品阶/缺组/缺层一律 raise：兜底默认值会把「漏登记」变成静默错档。
     """
     global _EF_LAYERS
     if _EF_LAYERS is None:
@@ -1138,7 +1138,7 @@ def _ef_nameplate(d, cx, cy, R, outline, field_mid, tone="ef_gold_pure"):
     几何按素材实测（154413/153659 放大 3 倍测量，×2.9 映射到 R=470 画布）：
     板宽 ≈ 0.21×章宽(168px)、高 ≈ 99px、板顶距顶点 ≈ 72px、描边 ≈ 6px、
     四角铆钉空心小圆 r≈8、空心三角宽 30×高 42 于顶点。
-    **落笔坐标取自 `engine/ef_layer_geom.py` 的 `PLATE`（单一事实源，纪律 ⑬）**：
+    **落笔坐标取自 `engine/ef_layer_geom.py` 的 `PLATE`（单一事实源）**：
     量测器要按同一张表算「笔画有没有活进验收 bin」，写死在这里就会两边各说各话。"""
     p = EF_PLATE
     x0, y0, x1, y1 = cx + p["dx0"], cy + p["dy0"], cx + p["dx1"], cy + p["dy1"]
@@ -1230,7 +1230,7 @@ def compose_endfield(face, text="", subtitle="", serial="", tone="ef_silver",
     fade = Image.new("L", (CW, CH), 0)
     fd = ImageDraw.Draw(fade)
     # 190 仍是**未实测**常数，但 V-④ 量过它值不值得抬：可算的子带里「要压到素材那个压暗比
-    # 所需的不透明度」全部 ≥1.0（`python engine/measure_legacy_layers.py --fade <渲染目录>`）
+    # 所需的不透明度」全部 ≥1.0（对渲染件逐格量「刻得出所需不透明度」的占比）
     # ⇒ 坡道抬满到 255 也到不了素材，真瓶颈在点色与网点占空，不在这条坡道上。
     for yy in range(int(cy + apothem * 0.45), int(cy + apothem)):
         t = (yy - (cy + apothem * 0.45)) / (apothem * 0.55)
