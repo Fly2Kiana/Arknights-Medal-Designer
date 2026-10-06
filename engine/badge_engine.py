@@ -6,8 +6,9 @@
   明日方舟蚀刻章 = 尖角正六边形(pointy-top, 宽高比≈0.87) + 3~4层同心细线套环
                    + 石板蓝哑光网点底 + 银白细线描符号纹章 + 嵌入式横字带
                    （无发光/无渐变/无投影；金色仅活动金章；镀层版为全息虹彩）
-  终末地蚀刻章 = 尖角正六边形(略纵向拉伸) + 顶部挂扣 + 单细深描边
+  终末地蚀刻章 = 尖角正六边形(实测宽高比≈0.88) + 单细深描边
                    + 阳极氧化拉丝金属反光（镜面高光带 + 青绿虹移）+ 章面极简文字
+                   （三家族轮廓统一，无切角、无外凸挂扣；名牌框/圆盘/触点均在章面内部）
 
 用法:
   python badge_engine.py <input> [-o out.png] [--style arknights|endfield]
@@ -16,6 +17,7 @@
 """
 import argparse
 import colorsys
+import json
 import math
 import os
 import sys
@@ -23,6 +25,11 @@ from collections import deque
 
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ef_layer_geom import CORNER_SIZE as EF_CORNER_SIZE  # noqa: E402
+from ef_layer_geom import PLATE as EF_PLATE  # 装饰层落笔几何单一事实源（纪律 ⑬）
+from ef_layer_geom import corner_origins as _ef_corner_origins  # noqa: E402
 
 # ----------------------------------------------------------------------------
 # 字体
@@ -397,6 +404,19 @@ def _hatch(h, w, period=9.0, angle_deg=32.0):
     return np.clip(1.0 - frac * 1.5, 0.0, 1.0)
 
 
+def _luma_span(img):
+    """Rec.601 明度的极差（灰阶 0~255）：章面「自己有没有拉开」的量。"""
+    a = np.asarray(img.convert("RGB"), dtype=np.float32)
+    luma = 0.299 * a[..., 0] + 0.587 * a[..., 1] + 0.114 * a[..., 2]
+    return float(luma.max() - luma.min())
+
+
+# 回退支自动色阶的跨度门限（灰阶）。实测：平坦类夹具（纯色/雾天）章面跨度 3.9~8.0，
+# 真实照片输入 36.2~107.5，官方章面跨度 p1 锚 162.2 —— 取平坦间隙几何平均并受 p1 封顶。
+# 复现命令：python engine/measure_content_gain.py
+FALLBACK_POLISH_SPAN_MIN = 17.0
+
+
 # 色板（取自官方素材色值，经视觉复核校准）
 PALETTES = {
     # ===== 明日方舟 =====
@@ -408,11 +428,18 @@ PALETTES = {
     "plated":     ((70, 81, 92), (196, 208, 215), (250, 252, 253)),
     # ===== 终末地（阳极氧化金属：亮金属面 + 深色蚀刻线稿）=====
     # 银色·初期：缎面银白金属，深灰阴刻线
-    "ef_silver":  ((233, 230, 229), (206, 203, 202), (44, 47, 46)),
+    "ef_silver":  ((52, 56, 60), (150, 154, 158), (240, 240, 238)),
+    "ef_gold_pure": ((196, 150, 70), (240, 228, 190), (252, 250, 240)),
     # 金色·加工：暖金铜面，深棕蚀刻线
-    "ef_gold":    ((247, 233, 172), (222, 168, 84), (56, 43, 22)),
+    "ef_gold":    ((206, 158, 74), (240, 228, 190), (252, 250, 240)),
     # 炫彩·特殊镀层：亮基底上白色线稿（虹彩由镀膜层负责）
     "ef_irid":    ((150, 136, 114), (212, 202, 190), (255, 255, 255)),
+    # 深灰排名章：近黑场 + 白蚀刻（#N 角标）
+    "ef_dark":    ((45, 47, 49), (180, 182, 184), (248, 248, 246)),
+    # 铜阶（与深灰共场、去排名角标）
+    "ef_bronze":  ((45, 47, 49), (180, 182, 184), (248, 248, 246)),
+    # 虹彩珠光镀层：白珠光场 + 深灰蚀刻
+    "ef_pearl":   ((228, 232, 236), (118, 124, 130), (42, 46, 52)),
     # 社区主流：浅银金属底 + 深蚀刻线（dark-on-light 极性用）
     "steel":      ((214, 219, 224), (120, 128, 136), (40, 47, 54)),
     # 糖果贴纸：焦糖描边 + 粉彩面 + 奶油高光
@@ -507,8 +534,16 @@ def etch_face(rgba, tone="silver", line_strength=1.0, detail=1.0, face_px=520,
     fa = sub.getchannel("A").filter(ImageFilter.GaussianBlur(0.5))
     # 整图入章（抠图回退）：大圆角 + 宽羽化 + 边缘压暗，画面融进章面金属底
     a_min, a_max = fa.getextrema()
-    if a_min > 200:
+    # 跨度门限只判 line 档。根本理由：A1 的病料是「引擎自己的排线」，而 `_hatch()` 只在
+    # line 支被调用 ⇒ 其余档没有可被刻深的线；实测理由：门限一并管到别的档时，
+    # 83 张全矩阵 A/B 出现一张真照片差分行（landscape/ef_gold/silhouette）—— silhouette
+    # 的平涂是设计意图，不该被当成"输入没信息"而关掉抛光。E-④ 的间隙本来就只在 line 支
+    # 量过（measure_content_gain.py 的 shadow_face 逐行复刻的就是它）。
+    span_ok = mode != "line" or _luma_span(face) >= FALLBACK_POLISH_SPAN_MIN
+    if a_min > 200 and span_ok:
         # 回退整图的对比度修复：自动色阶 + 对比增强（实战反馈：回退图普遍过淡发灰）
+        # 跨度门限：章面本身没拉开时（纯色/雾天输入只剩引擎自己的排线，跨度 0.1~8 灰阶），
+        # 自动色阶会把那 6 灰阶拉到 255 满量程 = 42 倍增益 ⇒ 排线被刻成满章深线。
         from PIL import ImageEnhance as _IE
         from PIL import ImageOps as _IO
         face = _IO.autocontrast(face.convert("RGB"), cutoff=1)
@@ -559,9 +594,27 @@ def _hex_halfwidth(r, dy):
     return (r - d) / r * (r * math.sqrt(3) / 2.0)
 
 
-def _halftone_tile(period=7, dot=1.4, color=(0, 0, 0), alpha=30, offset=True):
-    """规则网点抖动瓦片（模拟官方亚光金属网点）"""
+def _halftone_tile(period=7, dot=1.4, color=(0, 0, 0), alpha=30, offset=True, ss=1):
+    """规则网点抖动瓦片（模拟官方亚光金属网点）
+
+    `ss`>1：按 ss× 超采样画圆再 `Image.BOX` 面积均缩回，占空比 = 声明值
+    π·dot²/period²。默认 1 保持旧画法（方舟/糖果侧渲染字节不变）。旧画法在 dot 小
+    于一个像元量级时不可信：`period=5, dot=1.6` 声明 32.2% 占空、Pillow 实画 **84.0%**
+    ⇒「网点」变成「整片暗膜上留针孔」，见计划 §2.1-i。
+    """
     s = period
+    if ss > 1:
+        n = s * ss
+        m = Image.new("L", (n, n), 0)
+        md = ImageDraw.Draw(m)
+        r = dot * ss
+        if offset:
+            for qx, qy in ((0, 0), (n, 0), (0, n), (n, n)):
+                md.ellipse([qx - r, qy - r, qx + r, qy + r], fill=alpha // 2)
+        md.ellipse([n / 2 - r, n / 2 - r, n / 2 + r, n / 2 + r], fill=alpha)
+        tile = Image.new("RGBA", (s, s), color + (0,))
+        tile.putalpha(m.resize((s, s), Image.BOX))
+        return tile
     tile = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(tile)
     r = dot
@@ -874,8 +927,467 @@ def compose_arknights(face, text, subtitle="", serial="", tone="silver",
 
 
 # ----------------------------------------------------------------------------
-# 四、终末地模板 v10（参照游戏内实际样式：尖角六边形+顶部挂扣+阳极氧化金属反光）
+# 四、终末地模板 v11（依据 2026-09 游戏内截图考据，DESIGN_SPEC v2 §七：
+#     品阶 = 银/金/深灰排名/虹彩珠光镀层；形制家族 = story 剧情陈列 / combat 计数；
+#     共通元素：角部工程注记、顶部铭牌框、底部接口触点、网点渐隐、拉丝渐变）
 # ----------------------------------------------------------------------------
+
+# 终末地品阶场色（渐变 stops，沿拉丝轴）与蚀刻色
+EF_TONE_V2 = {  # 色值取自 2026-09 游戏内截图程序化采样（见 MATERIAL_INDEX）
+    "ef_silver": {  # 停点取自 2026-09 的色场采样（旧 v2 深冷灰档 lum≈80）。
+                   # 装饰四层（描边/网点/角部注记/铭牌面板）**不再**由这三个停点线性派生，
+                   # 改读 ef_layer_measured.json 的实测色（判据 L-0 ④ 自证过）；
+                   # 现在它们只驱动章面底色场与 `_metal_ramp` 兜底路径。
+        "field": [(70, 74, 78), (94, 96, 97), (52, 58, 62)],
+        "band": (190, 194, 198),
+        "engrave": (238, 238, 236),
+        "accent": (111, 184, 168),
+    },
+    "ef_gold_pure": {  # 纯金（剧情金章）：金体 + 右上→左下方向打光
+        "field": [(170, 140, 60), (238, 230, 185), (164, 131, 50)],
+        "band": (250, 245, 220),
+        "engrave": (252, 250, 240),
+        "accent": (200, 40, 50),
+    },
+    "ef_gold": {   # 实测 顶#DCD38E 侧#DC6107(亮橙) 底#98B020(黄绿)
+        "field": [(220, 97, 7), (220, 211, 142), (152, 176, 32)],
+        "band": (250, 245, 220),
+        "engrave": (250, 247, 235),
+        "accent": (200, 40, 50),
+    },
+    "ef_dark": {   # 实测 上#525457 侧#2B2E2C
+        "field": [(43, 46, 44), (82, 84, 87), (30, 31, 32)],
+        "band": (140, 143, 145),
+        "engrave": (240, 240, 238),
+        "accent": (200, 202, 204),
+    },
+    "ef_bronze": {  # 铜阶：与 dark 共场（面板计数 铜14=深灰观感），无 #N 角标；点缀取铜色
+        "field": [(43, 46, 44), (82, 84, 87), (30, 31, 32)],
+        "band": (140, 143, 145),
+        "engrave": (240, 240, 238),
+        "accent": (196, 130, 72),
+    },
+    "ef_pearl": {  # 实测 上#BBC2B1 侧#CDC2BC
+        "field": [(203, 194, 188), (228, 226, 214), (196, 210, 202)],
+        "band": (250, 250, 250),
+        "engrave": (52, 56, 60),
+        "accent": (150, 186, 172),
+    },
+}
+
+
+_EF_GRIDS = None
+
+
+def _ef_grids():
+    """采样自游戏内截图的 2D 色场网格（engine/ef_field_grids.json，8×9 控制点）"""
+    global _EF_GRIDS
+    if _EF_GRIDS is None:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ef_field_grids.json")
+        with open(p, encoding="utf-8") as f:
+            _EF_GRIDS = json.load(f)
+    return _EF_GRIDS
+
+
+def _ef_field(tone, CW, CH):
+    """网格 → 双三次插值的非对称色场（多方向渐变 1:1 复刻素材）"""
+    key = tone[3:] if tone.startswith("ef_") else tone   # ef_gold -> gold
+    key = {"bronze": "dark"}.get(key, key)               # 铜阶与排名章共用场网格
+    g = _ef_grids().get(key)
+    if not g:
+        return None
+    arr = np.asarray(g, dtype=np.uint8)
+    # 去团斑：网格先高斯平滑（单元格中值受纹章遮挡扰动，平滑保留渐变趋势、消除色斑）
+    m = max(arr.shape[0], arr.shape[1])
+    # 平滑分档：粗网格重抹去团斑；超细网格在采样端已 σ2.2 格平滑，这里只轻抹去残噪
+    sigma = 1.1 if m <= 16 else (0.7 if m <= 24 else (0.9 if m <= 48 else 0.55))
+    smooth = Image.fromarray(arr, "RGB").filter(ImageFilter.GaussianBlur(sigma))
+    arr = np.asarray(smooth)
+    # 边缘保持：首末行列各复制一次，防止插值把素材的陡峭边缘色带稀释
+    arr = np.concatenate([arr[:, :1], arr, arr[:, -1:]], axis=1)
+    arr = np.concatenate([arr[:1], arr, arr[-1:]], axis=0)
+    small = Image.fromarray(arr, "RGB")
+    # 场级扩散模糊：素材的虹彩是"色块自然扩散+模糊过渡"，插值噪声则呈条状——
+    # 上采样后做一次与色块尺度相当的低通，复刻素材的柔和扩散
+    field = small.resize((CW, CH), Image.BICUBIC)
+    blur_px = {"ef_pearl": 16}.get(tone, 20)
+    return field.filter(ImageFilter.GaussianBlur(blur_px))
+
+
+_EF_LAYERS = None
+
+
+def _ef_layers():
+    """装饰四层实测色（engine/ef_layer_measured.json，`measure_legacy_layers.py --emit` 生成）
+
+    缺品阶/缺组/缺层一律 raise：兜底默认值会把「漏登记」变成静默错档（纪律 ⑨）。
+    """
+    global _EF_LAYERS
+    if _EF_LAYERS is None:
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ef_layer_measured.json")
+        with open(p, encoding="utf-8") as f:
+            _EF_LAYERS = json.load(f)
+    return _EF_LAYERS
+
+
+def _ef_group(tone):
+    """该品阶借用的素材组（`meta.render_tone`，与量测器 `--check` 同一张表）"""
+    L = _ef_layers()
+    key = tone[3:] if tone.startswith("ef_") else tone
+    grp = L["meta"]["render_tone"].get(key)
+    if grp is None or grp not in L["groups"]:
+        raise KeyError(f"ef_layer_measured: 品阶 {tone} 的素材组 {grp!r} 未登记")
+    return L["groups"][grp]
+
+
+_EF_FEED_LAYERS = ("plate", "corner", "lowdot")   # 这三层按判据 L-4′ 的判定决定喂不喂
+
+
+def _ef_fed(tone, layer):
+    """这一层这一组**有没有实测可喂**：装饰三层判为不可单常数化/仪器不可见时
+    `feed_rgb` 是 null ⇒ 返回 None（调用方保持现常数，并据此知道「这次不是照实喂的」）。
+    描边/章面/环带没有极性之争，`rgb` 就是实测值。
+    """
+    e = _ef_group(tone).get(layer)
+    if e is None:
+        raise KeyError(f"ef_layer_measured: 缺层 {layer}")
+    if layer in _EF_FEED_LAYERS:
+        return tuple(e["feed_rgb"]) if e.get("feed_rgb") else None
+    return tuple(e["rgb"])
+
+
+def _ef_measured(tone, layer, fallback=None):
+    """一层实测色的绝对 RGB；`_ef_fed` 为 None 时返回 fallback（计划 §3.3）"""
+    return _ef_fed(tone, layer) or fallback
+
+
+def _ef_plate_lift(tone):
+    """铭牌面板**这块区域**的去梯度电平（plate − 同高两侧金属）。
+
+    素材 6 组里 5 组判 `flat`（|d_ref| 落进尺子的空读数 +0.016 内，计划 §6.1）⇒ 返回
+    None = 面板与周围金属齐平，不许提亮；只有 `lift` 才返回偏移量。
+    """
+    p = _ef_group(tone)["plate"]
+    return p["d_ref"] if p.get("d_ref_verdict") == "lift" else None
+
+
+def _ef_corner_annotation(d, x, y, text, color, size=13):
+    """角部工程注记：如 +001-E-1908 / ×××/＋｜ 式散布符号"""
+    f = load_font(FONT_MONO or FONT_EN_BLACK or FONT_CN, size or 14)
+    d.text((x, y), text, font=f, fill=color + (235,))
+
+
+def _ef_ports(d, cx, bottom_y, color):
+    """底部接口触点：两颗螺丝孔 + 一条触点条"""
+    for dx in (-52, 52):
+        d.ellipse([cx + dx - 7, bottom_y - 7, cx + dx + 7, bottom_y + 7],
+                  outline=color + (200,), width=3)
+    d.rounded_rectangle([cx - 26, bottom_y + 12, cx + 26, bottom_y + 24], radius=6,
+                        fill=color + (90,))
+
+
+def _ef_industry_hardware(d, cx, cy, R, outline, engrave, tp):
+    """industry 家族五金件（素材 153730 复核修正：章体为正六边形，无切角无挂耳）：
+    左上圆盘表扣 + 贴边侧接口 + 角区内六角螺丝 + 底部双箭 + L 形角码"""
+    f_dark = tp["field"][0]
+    # ---- 左上圆盘表扣：外环 + 内盘波形刻线 + 顶部双刻度 ----
+    px, py = cx - int(R * 0.42), cy - int(R * 0.26)
+    pr = int(R * 0.16)
+    d.ellipse([px - pr, py - pr, px + pr, py + pr], fill=f_dark + (80,),
+              outline=outline, width=7)
+    ir = int(pr * 0.72)
+    d.ellipse([px - ir, py - ir, px + ir, py + ir], outline=engrave + (200,), width=3)
+    for k in (-1, 0, 1):     # 盘内波形斜线（蚀刻排线语言）
+        d.line([(px - ir + 8, py + k * 12 + 14), (px + ir - 8, py + k * 12 - 14)],
+               fill=engrave + (190,), width=4)
+    for tx in (-8, 8):       # 顶部双刻度
+        d.line([(px + tx, py - pr - 12), (px + tx, py - pr + 2)], fill=outline, width=4)
+    # ---- 侧边接口（左右贴边内嵌矩形接插件，不凸出六边形轮廓）----
+    for sx in (-1, 1):
+        sx0 = cx + sx * int(R * 0.865)
+        x0 = sx0 - 24 if sx > 0 else sx0
+        d.rounded_rectangle([x0, cy - 26, x0 + 24, cy + 26], radius=5,
+                            fill=f_dark + (235,), outline=outline, width=3)
+        d.line([(x0 + 8, cy - 14), (x0 + 8, cy + 14)], fill=engrave + (140,), width=2)
+    # ---- 角区内六角螺丝（右上/左下区）----
+    for sx, sy in ((1, -1), (-1, 1)):
+        bx, by = cx + sx * int(R * 0.70), cy + sy * int(R * 0.60)
+        d.polygon(_hex_pts(bx, by, 12, rot_deg=30), fill=f_dark + (200,), outline=outline, width=3)
+        d.ellipse([bx - 4, by - 4, bx + 4, by + 4], fill=(18, 20, 22, 255))
+    # ---- 底部双箭形接口（深色三角楔块 + 内描线，位于底部两侧斜边上）----
+    for sx in (-1, 1):
+        ax, ay = cx + sx * int(R * 0.52), cy + int(R * 0.62)
+        d.polygon([(ax - 26, ay - 14), (ax + 26, ay - 14), (ax, ay + 22)],
+                  fill=f_dark + (235,), outline=outline, width=3)
+        d.line([(ax - 14, ay - 8), (ax, ay + 10)], fill=engrave + (150,), width=2)
+        d.line([(ax + 14, ay - 8), (ax, ay + 10)], fill=engrave + (150,), width=2)
+    # ---- L 形角码（内角轻量标记）----
+    L = 34
+    for sx, sy in ((1, -1), (-1, -1), (1, 1), (-1, 1)):
+        bx, by = cx + sx * int(R * 0.74), cy + sy * int(R * 0.78)
+        d.line([(bx, by), (bx - sx * L, by)], fill=engrave + (110,), width=3)
+        d.line([(bx, by), (bx, by - sy * L)], fill=engrave + (110,), width=3)
+    # ---- 右上环形进度弧（半透明 accent，素材右上角圆弧）----
+    ar = int(R * 0.66)
+    d.arc([cx - ar, cy - ar, cx + ar, cy + ar], start=-85, end=-15,
+          fill=tp["accent"] + (60,), width=5)
+
+
+def _ef_nameplate(d, cx, cy, R, outline, field_mid, tone="ef_gold_pure"):
+    """顶部铭牌框 v2：车牌式圆角矩形 + 四角铆钉 + 顶点空心三角指示
+    几何按素材实测（154413/153659 放大 3 倍测量，×2.9 映射到 R=470 画布）：
+    板宽 ≈ 0.21×章宽(168px)、高 ≈ 99px、板顶距顶点 ≈ 72px、描边 ≈ 6px、
+    四角铆钉空心小圆 r≈8、空心三角宽 30×高 42 于顶点。
+    **落笔坐标取自 `engine/ef_layer_geom.py` 的 `PLATE`（单一事实源，纪律 ⑬）**：
+    量测器要按同一张表算「笔画有没有活进验收 bin」，写死在这里就会两边各说各话。"""
+    p = EF_PLATE
+    x0, y0, x1, y1 = cx + p["dx0"], cy + p["dy0"], cx + p["dx1"], cy + p["dy1"]
+    # 面板**这块区域**的电平走实测 `d_ref`（plate − 同高两侧金属，去打光梯度）：素材 6 组
+    # 里 5 组判 `flat` ⇒ 只画框和铆钉、不填色（旧值 `field_mid+(60,)` 与奶油色 (244,236,200)
+    # 都是手设提亮，无素材依据）。面板里的刻字另走 L-4′，六组全是不可单常数化 ⇒ 保持现值。
+    lift = _ef_plate_lift(tone)
+    d.rounded_rectangle([x0, y0, x1, y1], radius=p["radius"],
+                        fill=None if lift is None
+                        else tuple(int(round(c * (1.0 + lift))) for c in field_mid) + (60,),
+                        outline=outline, width=6)
+    # 四角铆钉（小实心点，对照素材）
+    half_w, half_h = (x1 - x0) / 2.0, (y1 - y0) / 2.0
+    ins, rr = p["rivet_inset"], p["rivet_r"]
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            rx = cx + sx * (half_w - ins)
+            ry = y0 + half_h + sy * (half_h - ins)
+            d.ellipse([rx - rr, ry - rr, rx + rr, ry + rr], fill=outline)
+    # 顶点空心三角指示
+    aw = p["tri_half_w"]
+    apex = cy + p["apex_dy"]
+    tri = [(cx, apex), (cx - aw, apex + p["tri_h"]), (cx + aw, apex + p["tri_h"])]
+    d.polygon(tri, outline=outline, width=4)
+
+
+def compose_endfield(face, text="", subtitle="", serial="", tone="ef_silver",
+                     number="", fam="story") -> Image.Image:
+    CW, CH = 1000, 1240
+    canvas = Image.new("RGBA", (CW, CH), (0, 0, 0, 0))
+    cx, cy = CW // 2, 620
+    R = 470
+    fam = fam if fam in ("story", "combat", "industry") else "story"
+    tp = EF_TONE_V2.get(tone, EF_TONE_V2["ef_silver"])
+    f_dark, f_mid, f_end = tp["field"]
+
+    apothem = R * math.sqrt(3) / 2
+    outline_pts = _hex_pts(cx, cy, R - 3)
+    hex_mask = Image.new("L", (CW, CH), 0)
+    ImageDraw.Draw(hex_mask).polygon(outline_pts, fill=255)
+
+    outline_c = _ef_measured(tone, "edge") + (255,)
+    engrave_c = tp["engrave"]
+    corner_c = _ef_measured(tone, "corner", fallback=engrave_c)
+    accent = tp["accent"]
+
+    # ---- 场：素材采样网格的多方向非对称渐变（珠光走 v12 基准参数）----
+    axis = 55 if fam == "story" else 35
+    field = _ef_field(tone, CW, CH)
+    if field is not None:
+        from PIL import ImageEnhance
+        soft = tone == "ef_gold_pure"
+        if tone == "ef_pearl":
+            field = ImageEnhance.Color(field).enhance(1.08)      # 珠光柔和（v12 基准）
+        else:
+            field = ImageEnhance.Color(field).enhance(1.05 if soft else 1.25)
+        fa = np.asarray(field.convert("RGB"), dtype=np.float32)
+        yy2, xx2 = np.mgrid[0:CH, 0:CW].astype(np.float32)
+        edge_f = np.clip(np.sqrt(((xx2 - cx) / (R * 0.98)) ** 2 +
+                                 ((yy2 - cy) / (R * 1.08)) ** 2), 0, 1.15) ** 1.6
+        if tone == "ef_pearl":
+            boost = 1 + 0.50 * edge_f                            # 珠光：轻补偿（v12 基准）
+        elif soft:
+            boost = 1 + 0.30 * edge_f                            # 纯金：哑光
+        else:
+            boost = 1 + 1.15 * edge_f                            # 金属：浓烈边缘
+        mean3 = fa.mean(2, keepdims=True)
+        fa = np.clip(mean3 + (fa - mean3) * boost[..., None], 0, 255)
+        field = Image.fromarray(fa.astype(np.uint8), "RGB")
+        field = ImageEnhance.Contrast(field).enhance(1.05)
+        field = field.convert("RGBA")
+        field.alpha_composite(_brushed_streaks((CW, CH), axis, 230, 13))
+        canvas.paste(field, (0, 0), hex_mask)
+    else:
+        ramp = _metal_ramp((CW, CH), axis, f_dark, f_mid, tp["band"],
+                           band_pos=0.40, band_w=0.16).convert("RGBA")
+        ramp.alpha_composite(_brushed_streaks((CW, CH), axis, 240, 15))
+        canvas.paste(ramp, (0, 0), hex_mask)
+
+    # ---- 底部网点渐隐（章面下缘特征）----
+    # 实测的 `feed_rgb` 就是素材网点**笔画像元**自己的电平（判据 L-4′ 极性判定后的暗/亮
+    # 元中位色），所以照实喂时必须满不透明；旧常数 alpha=90 会把笔画朝底色场稀释掉
+    # ~2/3，量测器在 lowdot bin 里连样本都取不到（§2.1-i）。未照实喂的组保持 90。
+    # `ss=8` 是同一个坑的另一半：不超采样时画出来的不是 32% 网点而是 84% 暗膜。
+    dot_measured = _ef_fed(tone, "lowdot")
+    dot = _halftone_tile(period=5, dot=1.6, ss=8,
+                         color=dot_measured or tuple(int(c * 0.5) for c in f_mid),
+                         alpha=255 if dot_measured else 90, offset=False)
+    fade = Image.new("L", (CW, CH), 0)
+    fd = ImageDraw.Draw(fade)
+    # 190 仍是**未实测**常数，但 V-④ 量过它值不值得抬：可算的子带里「要压到素材那个压暗比
+    # 所需的不透明度」全部 ≥1.0（`python engine/measure_legacy_layers.py --fade <渲染目录>`）
+    # ⇒ 坡道抬满到 255 也到不了素材，真瓶颈在点色与网点占空，不在这条坡道上。
+    for yy in range(int(cy + apothem * 0.45), int(cy + apothem)):
+        t = (yy - (cy + apothem * 0.45)) / (apothem * 0.55)
+        fd.line([(0, yy), (CW, yy)], fill=int(190 * t))
+    big = Image.new("RGBA", (CW, CH))
+    tw, th2 = dot.size
+    for yy in range(0, CH, th2):
+        for xx in range(0, CW, tw):
+            big.paste(dot, (xx, yy), dot)
+    big.putalpha(ImageChops.multiply(big.getchannel("A"), fade))
+    canvas.alpha_composite(big)
+
+    # ---- 方向性打光：右上高光 → 左下渐暗（游戏内实拍规律）----
+    yy3, xx3 = np.mgrid[0:CH, 0:CW].astype(np.float32)
+    t_dir = np.clip(((xx3 - cx) / (CW * 0.62) - (yy3 - cy) / (CH * 0.62)) / 2 + 0.5, 0, 1)
+    light = 0.92 + 0.15 * (t_dir ** 1.2)          # 0.92(左下) → 1.07(右上)；网格场已含主打光
+    arr = np.asarray(canvas.convert("RGB"), dtype=np.float32) * light[..., None]
+    canvas = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
+    canvas.putalpha(Image.new("L", (CW, CH), 255))
+
+    # ---- 镀层珠光：低饱和虹彩偏移（白底珠光，非全息光谱）----
+
+
+
+    # ---- 中央纹章 ----
+    f = face.copy()
+    fr = min((650 if (tone == "ef_gold" and fam == "story") else 580) / max(f.size), 1.0)
+    f = f.resize((max(1, int(f.width * fr)), max(1, int(f.height * fr))), Image.LANCZOS)
+    canvas.alpha_composite(f, (cx - f.width // 2, cy - f.height // 2 - 10))
+
+    # ---- 描边：贴着章体边缘向内的**实心带**，不是居中在边界上的细线 ----
+    # 旧写法 `polygon(_hex_pts(R), width=5)` 的线宽是**居中**在路径上的（跨 R±2.5），
+    # 而末尾 keep_mask 按 R-3 裁 ⇒ 垂直于边只剩 2.7px；量测器的 `edge` bin 却是
+    # 「边缘向内 3+R//120 = 6px」，于是 6px 里 3.3px 仍是色场，判据 L-1 读不回实测电平
+    # （5 组里 4 组 |Δ| 0.102~0.255，见计划 §2.1-h）。带子按同一个 6px 口径画，多 1px
+    # 余量给章体边界的抗锯齿。
+    band_w = 3 + R // 120 + 1
+    edge_band = Image.new("L", (CW, CH), 0)
+    eb = ImageDraw.Draw(edge_band)
+    eb.polygon(_hex_pts(cx, cy, R - 3), fill=255)
+    eb.polygon(_hex_pts(cx, cy, R - 3 - band_w), fill=0)
+    canvas.paste(Image.new("RGBA", (CW, CH), outline_c), (0, 0), edge_band)
+
+    d = ImageDraw.Draw(canvas)
+    d.polygon(_hex_pts(cx, cy, R - 16), outline=outline_c[:3] + (110,), width=2)
+
+    # ---- 条纹簇装饰（右上/左下斜线排组，对照素材角部密排线）----
+    if fam == "story":
+        def stripes(px, py, n, ln, gap, col, wid=2):
+            for i in range(n):
+                d.line([(px + i * gap, py), (px + i * gap + ln, py + ln)],
+                       fill=col, width=wid)
+        stripes(cx + 120, cy - R + 60, 7, 46, 9, engrave_c + (60,))
+        stripes(cx - R + 60, cy + 110, 6, 40, 9, engrave_c + (55,))
+        stripes(cx + apothem - 120, cy + 60, 5, 34, 8, engrave_c + (50,))
+
+    # ---- 剧情章装饰：斜插销钉 + 左侧点阵（对照 核心降落）----
+    if fam == "story" and tone == "ef_gold_pure":
+        pin = (92, 74, 34, 255)
+        for (px, py, ang) in ((cx - R + 70, cy - R + 130, 32), (cx + R - 170, cy + 130, 32)):
+            L = 96
+            dxp, dyp = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+            d.line([(px - dxp * L / 2, py - dyp * L / 2), (px + dxp * L / 2, py + dyp * L / 2)],
+                   fill=pin, width=10)
+            d.ellipse([px - dxp * L / 2 - 5, py - dyp * L / 2 - 5,
+                       px - dxp * L / 2 + 5, py - dyp * L / 2 + 5], fill=pin)
+        for r_ in range(4):
+            for c_ in range(3):
+                d.ellipse([cx - R + 52 + c_ * 16, cy - 20 + r_ * 16,
+                           cx - R + 60 + c_ * 16, cy - 12 + r_ * 16],
+                          fill=(250, 247, 235, 200))
+
+    # ---- 两侧装饰轨：螺丝 + 字符列 / 点阵栅格（对照截图左右缘）----
+    if fam == "story":
+        lx, rx = cx - apothem + 16, cx + apothem - 16
+        rail = engrave_c + (120,)
+        d.line([(lx, cy - R + 90), (lx, cy + R - 110)], fill=rail, width=1)
+        d.line([(rx, cy - R + 90), (rx, cy + R - 110)], fill=rail, width=1)
+        for sy in (cy - 150, cy, cy + 150):
+            for sx in (lx, rx):
+                d.ellipse([sx - 5, sy - 5, sx + 5, sy + 5], outline=rail, width=2)
+        f_g = load_font(FONT_MONO or FONT_CN, 13)
+        for i, gy in enumerate(range(cy - 110, cy + 120, 42)):
+            d.text((lx - 6, gy), ("+" if i % 2 == 0 else "×"), font=f_g, fill=rail)
+            d.text((rx - 4, gy), ("·" if i % 2 == 0 else "+"), font=f_g, fill=rail)
+        for gy in range(cy - 130, cy + 130, 18):
+            d.ellipse([rx + 4, gy, rx + 7, gy + 3], fill=rail)
+        # 红色点缀线（穿过纹章中心，对照 top0 的红色标记线）
+        if tone == "ef_gold":
+            ry_ = cy - 6
+            d.line([(cx - 64, ry_), (cx + 64, ry_)], fill=accent + (210,), width=4)
+            for dxx in (-48, -16, 16, 48):
+                d.ellipse([cx + dxx - 4, ry_ - 4, cx + dxx + 4, ry_ + 4], fill=accent + (230,))
+
+    # ---- 顶部铭牌框（story/combat：车牌式 + 四角铆钉 + 空心三角）/ industry：五金件 ----
+    if fam == "industry":
+        _ef_industry_hardware(d, cx, cy, R, outline_c, engrave_c, tp)
+    else:
+        _ef_nameplate(d, cx, cy, R, outline_c, f_mid, tone)
+    # 四条注记的落点取自实测带（`ef_layer_geom.CORNER`，素材角部注记暗元 u/v 分位）：
+    # 旧坐标有 3 条画在章体外被裁掉、第 4 条在章内但在验收 bin 外（存活率全 0.000）。
+    for x, y, s in _ef_corner_origins(cx, cy, R):
+        _ef_corner_annotation(d, x, y, s, corner_c, EF_CORNER_SIZE)
+
+    # ---- 底部接口触点 ----
+    _ef_ports(d, cx, int(cy + apothem) - 34, engrave_c)
+
+    # ---- 章面文字：排名角标（深灰章） / 数字层级 / HUD 注记 ----
+    f_num = load_font(FONT_EN_BLACK or FONT_MONO or FONT_CN, 38)
+    f_note = load_font(FONT_MONO or FONT_CN, 17)
+    if tone == "ef_dark" and number:
+        rk = f"#{number}"
+        d.text((cx + R - 190, cy - 60), rk, font=load_font(FONT_EN_BLACK or FONT_CN, 44),
+               fill=engrave_c + (230,))
+    elif number and fam == "story" and tone in ("ef_gold", "ef_pearl"):
+        f_big = load_font(FONT_EN_BLACK or FONT_CN, 64)
+        wt = f"{number}"
+        d.text((cx - R + 84, cy + 70), wt, font=f_big, fill=engrave_c + (225,))
+    elif number and fam != "combat" and tone == "ef_silver":
+        nw, nh = 138, 58
+        nx, ny = cx - nw // 2 - 46, cy + R - 196
+        d.rounded_rectangle([nx, ny, nx + nw, ny + nh], radius=9,
+                            fill=(20, 22, 24, 215),
+                            outline=(255, 255, 255, 110), width=2)
+        tw = d.textlength(number, font=f_num)
+        d.text((nx + nw / 2 - tw / 2, ny + nh / 2 - f_num.size / 2 - 2), number,
+               font=f_num, fill=(245, 245, 240, 255))
+    if fam == "combat" and number:
+        f_cnt = load_font(FONT_EN_BLACK or FONT_CN, 46)
+        cnt = f"{number} TIMES"
+        d.text((cx - d.textlength(cnt, font=f_cnt) / 2, cy + R - 240), cnt,
+               font=f_cnt, fill=engrave_c + (220,))
+    note = f"EF-MEDAL SYS // {serial}" if serial else "EF-MEDAL SYS"
+    while d.textlength(note, font=f_note) > 210 and len(note) > 4:
+        note = note[:-1]
+    nt = d.textlength(note, font=f_note)
+    d.text((cx - nt / 2, cy - R + 190), note, font=f_note,
+           fill=engrave_c[:3] + (160,) if tone != "ef_pearl" else (60, 64, 68, 170))
+
+    # ---- 裁回章体 + 细颗粒 ----
+    keep_mask = Image.new("L", (CW, CH), 0)
+    kd = ImageDraw.Draw(keep_mask)
+    kd.polygon(_hex_pts(cx, cy, R - 3), fill=255)   # 三家族轮廓统一正六边形，无外凸件
+    clean = Image.new("RGBA", (CW, CH), (0, 0, 0, 0))
+    clean.paste(canvas, (0, 0), keep_mask)
+    canvas = clean
+    rng = np.random.default_rng(7)
+    n = rng.integers(-4, 5, (CH, CW, 1), dtype=np.int16)
+    arr = np.asarray(canvas.convert("RGB"), dtype=np.int16) + n
+    noisy = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
+    # 章体剪影一律硬边正六边形。不能用 `canvas.getchannel("A")`：ImageDraw 画半透明笔画时
+    # 是把 fill 的 alpha **写进** alpha 通道（不是叠加），内发丝线 (…,110) 因此在 R-16 处
+    # 留下一条 <127 的「假透明缝」⇒ alpha 被切成外环 + 本体两块，量测器 `alpha>127` 口径下
+    # 的 `edge` bin 从 6px 变成 14px（逐次腐蚀前 6 圈各吃掉 7~9k 像元，本体周边只有 2.9k），
+    # 于是描边电平永远读不回来（计划 §2.1-h）。
+    noisy.putalpha(keep_mask)
+    return noisy
 
 def _hex_pts_stretched(cx, cy, rx, ry, rot_deg=0.0):
     pts = []
@@ -951,147 +1463,29 @@ def _spectral_film(size, alpha=100, theta_deg=35, sat_boost=1.0):
     return ov
 
 
-def apply_ak_plating(img):
-    """明日方舟镀层后处理：提亮 + 降饱和 + 整面全息镀膜 + 多彩漫反射（不破坏透明区）"""
+def apply_ak_plating(img, hue_shift=150):
+    """明日方舟镀层后处理 v2（ak_pairs 成对素材校准）：
+    镀层 = 同骨骼整体色相偏移（如 破阵子 铜青→粉青）+ 提亮 + 轻珠光膜（非整面光谱）"""
     from PIL import ImageEnhance
     base_alpha = img.getchannel("A")
-    out = ImageEnhance.Color(img).enhance(0.82)
-    out = ImageEnhance.Brightness(out).enhance(1.07)
-    out.alpha_composite(_spectral_film(out.size, alpha=200, theta_deg=35, sat_boost=1.18))
-    # 第二道反向光谱，制造干涉层次
-    out.alpha_composite(_spectral_film(out.size, alpha=95, theta_deg=145, sat_boost=1.18))
-    # 高光漫反射柔光带
+    rgb = img.convert("RGB")
+    hsv = rgb.convert("HSV")
+    h, s, v = hsv.split()
+    h = h.point(lambda v_: (v_ + hue_shift) % 256)
+    out = Image.merge("HSV", (h, s, v)).convert("RGBA")
+    out = ImageEnhance.Brightness(out).enhance(1.06)
+    out = ImageEnhance.Color(out).enhance(1.05)
+    # 轻珠光干涉（低透明度，保留骨骼可读性）
+    out.alpha_composite(_spectral_film(out.size, alpha=70, theta_deg=35, sat_boost=0.8))
     band = Image.new("RGBA", out.size, (0, 0, 0, 0))
     db = ImageDraw.Draw(band)
     W, H = out.size
-    for i in range(-W, W, 170):
-        db.line([(i, H), (i + W, 0)], fill=(255, 255, 255, 30), width=26)
-    band = band.filter(ImageFilter.GaussianBlur(18))
+    for i in range(-W, W, 200):
+        db.line([(i, H), (i + W, 0)], fill=(255, 255, 255, 26), width=24)
+    band = band.filter(ImageFilter.GaussianBlur(20))
     out.alpha_composite(band)
     out.putalpha(base_alpha)
     return out
-
-
-def compose_endfield(face, text="", subtitle="", serial="", tone="ef_silver",
-                     number="") -> Image.Image:
-    CW, CH = 1000, 1240
-    canvas = Image.new("RGBA", (CW, CH), (0, 0, 0, 0))
-    cx, cy = CW // 2, 620
-    R = 470                      # 正六边形：宽=√3·R≈814，高=2R=940，比例≈0.866
-
-    if tone == "ef_gold":
-        c_dark, c_mid, c_band = (104, 76, 40), (222, 168, 84), (247, 233, 172)
-        outline_c, engrave_c = (36, 26, 14, 255), (59, 46, 26, 255)
-        edge_shift = (110, 122, 58)
-    elif tone == "ef_irid":
-        c_dark, c_mid, c_band = (142, 126, 106), (206, 195, 180), (246, 242, 236)
-        outline_c, engrave_c = (26, 29, 33, 255), (245, 245, 240, 255)
-        edge_shift = (111, 184, 168)
-    else:
-        c_dark, c_mid, c_band = (138, 141, 143), (206, 203, 202), (242, 242, 240)
-        outline_c, engrave_c = (30, 33, 36, 255), (58, 61, 60, 255)
-        edge_shift = (111, 184, 168)
-
-    apothem = R * math.sqrt(3) / 2
-    hex_mask = Image.new("L", (CW, CH), 0)
-    ImageDraw.Draw(hex_mask).polygon(_hex_pts(cx, cy, R - 3), fill=255)
-
-    # ---- 阳极氧化金属底：斜向 ramp + 镜面高光带 ----
-    ramp = _metal_ramp((CW, CH), 55, c_dark, c_mid, c_band,
-                       band_pos=0.40, band_w=0.14).convert("RGBA")
-    canvas.paste(ramp, (0, 0), hex_mask)
-
-    # ---- 顺向拉丝 ----
-    brush = _brushed_streaks((CW, CH), 55, count=260, alpha=15)
-    canvas.alpha_composite(brush)
-
-    # ---- 极淡 HUD 技术纹 ----
-    dt = ImageDraw.Draw(canvas)
-    for i in range(6):
-        y0 = cy - R + 120 + i * 140
-        dt.line([(cx - apothem + 50, y0), (cx + apothem - 50, y0)],
-                fill=(255, 255, 255, 14), width=1)
-
-    # ---- 中央纹章（照片主体蚀刻像）----
-    f = face.copy()
-    fr = min(580 / max(f.size), 1.0)
-    f = f.resize((max(1, int(f.width * fr)), max(1, int(f.height * fr))), Image.LANCZOS)
-    canvas.alpha_composite(f, (cx - f.width // 2, cy - f.height // 2 - 10))
-
-    # ---- 点缀色通道（终末地复刻的局部绿/紫虹彩色块）----
-    if tone == "ef_gold":
-        for bx, by, br in ((cx - 160, cy - 210, 56), (cx + 165, cy + 185, 68)):
-            blob = _spectral_film((br * 2, br * 2), alpha=95, theta_deg=35, sat_boost=1.2)
-            bm = Image.new("L", blob.size, 0)
-            ImageDraw.Draw(bm).ellipse([0, 0, br * 2 - 1, br * 2 - 1], fill=255)
-            blob.putalpha(ImageChops.multiply(blob.getchannel("A"), bm))
-            canvas.alpha_composite(blob, (int(bx - br), int(by - br)))
-
-    # ---- 边缘青绿虹移（下缘与右缘的阳极氧化"弄花"）----
-    shift = Image.new("RGBA", (CW, CH), (0, 0, 0, 0))
-    dsh = ImageDraw.Draw(shift)
-    dsh.polygon(_hex_pts(cx, cy, R - 10), outline=edge_shift + (70,), width=16)
-    shift = shift.filter(ImageFilter.GaussianBlur(5))
-    canvas.alpha_composite(shift)
-
-    # ---- 单条细深描边 + 内发丝线 ----
-    d = ImageDraw.Draw(canvas)
-    d.polygon(_hex_pts(cx, cy, R), outline=outline_c, width=5)
-    d.polygon(_hex_pts(cx, cy, R - 14), outline=outline_c[:3] + (110,), width=2)
-
-    # ---- 顶部矩形挂扣（终末地识别特征；内嵌于顶点，保持正六边形剪影）----
-    loop_w, loop_h = 156, 78
-    lx0, ly0 = cx - loop_w / 2, cy - R - 2
-    d.rounded_rectangle([lx0 + 4, ly0 + 6, lx0 + loop_w - 4, ly0 + loop_h],
-                        radius=12,
-                        fill=tuple(int(c * 0.55) for c in c_dark[:3]) + (255,),
-                        outline=outline_c, width=4)
-    d.rounded_rectangle([lx0, ly0 - 2, lx0 + loop_w - 8, ly0 + loop_h - 14],
-                        radius=10,
-                        fill=tuple(int(c * 1.02) for c in c_band[:3]) + (255,),
-                        outline=outline_c, width=4)
-    d.rounded_rectangle([lx0 + 26, ly0 + 12, lx0 + loop_w - 34, ly0 + loop_h - 26],
-                        radius=5, outline=outline_c[:3] + (170,), width=3)
-
-    # ---- 章面极简文字：角部数字 label + 极小 HUD 注记 ----
-    f_num = load_font(FONT_EN_BLACK or FONT_MONO or FONT_CN, 38)
-    f_note = load_font(FONT_MONO or FONT_CN, 17)
-    num = number or ""
-    if num:
-        nw, nh = 138, 58
-        nx, ny = cx - nw // 2 - 46, cy + R - 196   # 章内左下安全区
-        d.rounded_rectangle([nx, ny, nx + nw, ny + nh], radius=9,
-                            fill=(20, 22, 24, 215),
-                            outline=(255, 255, 255, 110), width=2)
-        tw = d.textlength(num, font=f_num)
-        d.text((nx + nw / 2 - tw / 2, ny + nh / 2 - f_num.size / 2 - 2), num,
-               font=f_num, fill=(245, 245, 240, 255))
-    note = f"EF-MEDAL SYS // {serial}" if serial else "EF-MEDAL SYS"
-    while d.textlength(note, font=f_note) > 210 and len(note) > 4:
-        note = note[:-1]
-    nt = d.textlength(note, font=f_note)
-    d.text((cx - nt / 2, cy - R + 52), note, font=f_note,
-           fill=engrave_c[:3] + (150,) if tone != "ef_irid" else (250, 250, 248, 170))
-
-    # ---- 炫彩特殊镀层：整面鲜明全息光谱（两道交叉）----
-    if tone == "ef_irid":
-        canvas.alpha_composite(_spectral_film((CW, CH), alpha=225, theta_deg=35, sat_boost=1.22))
-        canvas.alpha_composite(_spectral_film((CW, CH), alpha=110, theta_deg=140, sat_boost=1.22))
-
-    # ---- 裁回章体 & 细颗粒（保留挂扣区域）----
-    keep_mask = Image.new("L", (CW, CH), 0)
-    ImageDraw.Draw(keep_mask).polygon(_hex_pts(cx, cy, R - 3), fill=255)
-    ImageDraw.Draw(keep_mask).rounded_rectangle([lx0 - 6, ly0 - 6, lx0 + loop_w + 6, ly0 + loop_h + 4],
-                                                radius=12, fill=255)
-    clean = Image.new("RGBA", (CW, CH), (0, 0, 0, 0))
-    clean.paste(canvas, (0, 0), keep_mask)
-    canvas = clean
-    rng = np.random.default_rng(7)
-    n = rng.integers(-4, 5, (CH, CW, 1), dtype=np.int16)
-    arr = np.asarray(canvas.convert("RGB"), dtype=np.int16) + n
-    noisy = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
-    noisy.putalpha(canvas.getchannel("A"))
-    return noisy
 
 
 # ----------------------------------------------------------------------------
@@ -1337,7 +1731,7 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
              subtitle="", serial="", no_matting=False, line_strength=1.0,
              detail=1.0, matting_tol=26.0, number="", mode="auto",
              emblem_design=None, emblem_style="lineart",
-             polarity="dark-on-light", carve="machine"):
+             polarity="dark-on-light", carve="machine", endfield_family="story"):
     src = Image.open(input_path)
     src.load()
     check_input_pixels(src)
@@ -1345,12 +1739,19 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
         src.seek(0)
 
     # 色调归一（方舟: silver/gold/plated/stamp；终末地: ef_silver/ef_gold/ef_irid）
+    # 表里必须登记 --list-types 公布的每个 ef_* id 自身：兜底是 ef_silver，漏登记会静默错档
     if tone is None:
         tone = "silver" if style == "arknights" else "ef_silver"
     if style == "endfield":
-        tone = {"silver": "ef_silver", "industrial": "ef_silver",
-                "plated": "ef_gold", "gold": "ef_gold",
-                "iridescent": "ef_irid", "ef_irid": "ef_irid"}.get(tone, "ef_silver")
+        tone = {"silver": "ef_silver", "industrial": "ef_silver", "ef_silver": "ef_silver",
+                "plated": "ef_gold", "gold": "ef_gold_pure",
+                "gold_plated": "ef_gold", "ef_gold": "ef_gold",
+                "iridescent": "ef_pearl", "ef_irid": "ef_pearl",
+                "dark": "ef_dark", "ef_dark": "ef_dark",
+                "bronze": "ef_bronze", "ef_bronze": "ef_bronze", "copper": "ef_bronze",
+                "pearl": "ef_pearl", "ef_pearl": "ef_pearl",
+                "gold_pure": "ef_gold_pure", "ef_gold_pure": "ef_gold_pure",
+                "pure": "ef_gold_pure"}.get(tone, "ef_silver")
 
     warn = ""
     compose_tone = None
@@ -1408,6 +1809,8 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
             if kind == "photo" and not no_matting:
                 subject = flatten_texture(subject, strength=detail)
 
+            if style == "endfield" and mode == "auto":
+                mode = "silhouette"   # 素材纹章为扁平实心形（DESIGN_SPEC v2 §7.3）
             eff_mode = "line" if mode in ("auto", "emblem") else mode
             if mode == "emblem":
                 warn = (warn + "\n" if warn else "") + \
@@ -1420,7 +1823,8 @@ def generate(input_path, output_path, style="arknights", tone=None, text="蚀刻
                 face = carve_texture(face, "hand")
 
     if style == "endfield":
-        out = compose_endfield(face, text, subtitle, serial, tone, number)
+        out = compose_endfield(face, text, subtitle, serial, tone, number,
+                               fam=endfield_family)
     elif style == "candy":
         # 糖果贴纸章：主体同样走抽象概括（AI 设计稿按糖果画风渲染）
         if emblem_design:
@@ -1484,7 +1888,9 @@ def main(argv=None):
                          "便于追溯与二次修改（含每轮参数/告警/设计稿快照）")
     ap.add_argument("--style", choices=["arknights", "endfield", "candy"], default="arknights")
     ap.add_argument("--tone", default=None,
-                    help="方舟: silver(普通)|plated(镀层)|gold(活动金章)；终末地: silver(银)|gold(金)|iridescent(炫彩)")
+                    help="方舟: silver(普通)|plated(镀层)|gold(活动金章)；终末地: silver(银)|gold_pure/pure(纯金)|gold(镀彩金)|dark(排名)|bronze(铜阶)|pearl(镀层)")
+    ap.add_argument("--endfield-family", default="story", choices=["story", "combat", "industry"],
+                    help="终末地形制家族：story 剧情/陈列金章 | combat 计数章 | industry 工业五金铭牌（工业/调度）")
     ap.add_argument("--text", default="蚀刻勋章")
     ap.add_argument("--subtitle", default="")
     ap.add_argument("--serial", default="")
@@ -1532,7 +1938,8 @@ def main(argv=None):
                           args.subtitle, args.serial, args.no_matting,
                           args.line_strength, args.detail, args.matting_tol,
                           args.number, args.mode, args.emblem_design,
-                          args.emblem_style, args.polarity, args.carve)
+                          args.emblem_style, args.polarity, args.carve,
+                          args.endfield_family)
     if proj_dir:
         if round_no is None:
             round_no = 1 + len([f for f in os.listdir(proj_dir)
