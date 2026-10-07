@@ -116,7 +116,21 @@ def _auto_materialize(shapes, canvas_px):
                 sd.arc([cx - r, cy - r, cx + r, cy + r],
                        start=float(s.get("a0", 0)), end=float(s.get("a1", 360)),
                        fill=255, width=w)
-        except (KeyError, TypeError, ValueError, IndexError):
+            elif t == "bezier":
+                sd.line(_sample_bezier(tuple(s["p0"]), tuple(s["p1"]),
+                                       tuple(s["p2"]), tuple(s["p3"])), fill=255, width=w)
+            elif t in ("star", "sunburst", "laurel", "banner"):
+                _draw_ornament(sd, s, lambda lum, _s=None: 255, canvas_px)
+            elif t == "blob":
+                sd.polygon(_blob_points(s), outline=255, width=w)
+            elif t == "ribbon":
+                _pts, spine = _ribbon_points(s)
+                sd.line(spine, fill=255, width=w)
+            elif t == "flame":
+                sd.polygon(_flame_points(s), outline=255, width=w)
+            elif t == "wing":
+                _draw_wing(sd, s, 255, False, w)
+        except (KeyError, TypeError, ValueError, IndexError, ZeroDivisionError):
             continue
 
     m = np.asarray(stroke_img) > 0
@@ -164,11 +178,128 @@ def _sample_bezier(p0, p1, p2, p3, n=48):
     return pts
 
 
+def _blob_points(s):
+    """有机团块采样点列：谐波调制半径的闭合形（云/花/流体剪影母题）"""
+    cx, cy = float(s["cx"]), float(s["cy"])
+    r = float(s.get("r", 120) or 120)
+    lobes = max(2, int(s.get("lobes", 5) or 5))
+    amp = max(0.0, min(0.6, float(s.get("amp", 0.28) or 0.0)))
+    rot = math.radians(float(s.get("rot", 0) or 0))
+    pts = []
+    for i in range(64):
+        th = rot + 2 * math.pi * i / 64
+        rr = r * (1.0 + amp * math.cos(lobes * th))
+        pts.append((cx + rr * math.cos(th), cy + rr * math.sin(th)))
+    return pts
+
+
+def _ribbon_points(s):
+    """绶带/飘带多边形：三次贝塞尔中轴（sway 横向摆动 + waves 波动）+ 法向等宽"""
+    x0, y0 = float(s["x0"]), float(s["y0"])
+    x1, y1 = float(s["x1"]), float(s["y1"])
+    width = max(4.0, float(s.get("width", 56) or 56))
+    sway = float(s.get("sway", 0) or 0)
+    waves = max(0, int(s.get("waves", 1) or 0))
+    dx, dy = x1 - x0, y1 - y0
+    L = math.hypot(dx, dy)
+    if L < 1e-6:
+        raise ValueError("ribbon 端点重合")
+    nx, ny = -dy / L, dx / L          # 单位法向
+    p1 = (x0 + dx * 0.33 + nx * sway, y0 + dy * 0.33 + ny * sway)
+    p2 = (x0 + dx * 0.67 - nx * sway, y0 + dy * 0.67 - ny * sway)
+    spine = _sample_bezier((x0, y0), p1, p2, (x1, y1), n=40)
+    if waves:                          # 叠加正弦波动（飘带褶皱）
+        spine = [(px + nx * width * 0.35 * math.sin(i / 40 * math.pi * waves * 2),
+                  py + ny * width * 0.35 * math.sin(i / 40 * math.pi * waves * 2))
+                 for i, (px, py) in enumerate(spine)]
+    half = width / 2.0
+    left = [(px + nx * half, py + ny * half) for px, py in spine]
+    right = [(px - nx * half, py - ny * half) for px, py in spine]
+    return left + right[::-1], spine
+
+
+def _flame_points(s):
+    """焰/瓣形采样点列：双弧对称叶面（花瓣/叶片/火焰母题），lean 使尖端偏向"""
+    cx, cy = float(s["cx"]), float(s["cy"])
+    h = max(8.0, float(s.get("h", 240) or 240))
+    w0 = max(4.0, float(s.get("w0", s.get("w", 80)) or 80))
+    lean = max(-0.8, min(0.8, float(s.get("lean", 0) or 0)))
+    rot = math.radians(float(s.get("rot", -90) or 0))
+    ca, sa = math.cos(rot), math.sin(rot)
+    pts = []
+    for i in range(25):                # 左弧 基部→尖端
+        u = i / 24
+        lx = -w0 * 0.5 * math.sin(math.pi * u) + lean * h * (u ** 2)
+        ly = -h * u
+        pts.append((cx + lx * ca - ly * sa, cy + lx * sa + ly * ca))
+    for i in range(24, -1, -1):        # 右弧 尖端→基部
+        u = i / 24
+        lx = w0 * 0.5 * math.sin(math.pi * u) + lean * h * (u ** 2)
+        ly = -h * u
+        pts.append((cx + lx * ca - ly * sa, cy + lx * sa + ly * ca))
+    return pts
+
+
+def _draw_wing(d, s, sc, fill, w):
+    """翼形：主羽轴弧 + 交替羽片弧列（feathers 3~9）；fill 时羽片实心"""
+    cx, cy = float(s["cx"]), float(s["cy"])
+    length = float(s.get("length", 260) or 260)
+    spread = float(s.get("spread", 120) or 120)
+    ang = math.radians(float(s.get("angle", 0) or 0))
+    n = max(3, min(9, int(s.get("feathers", 5) or 5)))
+    ca, sa = math.cos(ang), math.sin(ang)
+
+    def rt(lx, ly):                    # 局部坐标（x 沿羽轴）→ 画布
+        return (cx + lx * ca - ly * sa, cy + lx * sa + ly * ca)
+
+    spine = []
+    for i in range(n + 1):
+        u = i / n
+        spine.append(rt(length * u, -spread * math.sin(math.pi * u) * 0.55))
+    d.line(spine, fill=sc, width=w, joint="curve")
+    for i in range(1, n + 1):
+        u = i / n
+        bx, by = spine[i]
+        fu = min(1.0, u + 0.8 / n)     # 羽片后掠：尖端落在羽轴更远处
+        flen = spread * (1.0 - 0.55 * u)
+        tx, ty = rt(length * fu + flen * 0.22, -spread * math.sin(math.pi * fu) * 0.55
+                    + flen * 0.9)
+        mid = rt(length * (u + fu) * 0.5 + flen * 0.06,
+                 -spread * math.sin(math.pi * (u + fu) * 0.5) * 0.55 + flen * 0.42)
+        seg = _sample_bezier((bx, by), mid, (tx, ty), (tx, ty), n=14)
+        if fill:
+            seg2 = _sample_bezier((bx, by), rt(length * u, flen * 0.18),
+                                  rt(length * fu - flen * 0.06, flen * 0.40), (tx, ty), n=14)
+            d.polygon(seg + seg2[::-1], fill=sc)
+        else:
+            d.line(seg, fill=sc, width=max(2, w - 2), joint="curve")
+
+
 def _draw_ornament(d, s, lum_color, canvas_px):
-    """纹章装饰原语：bezier/star/sunburst/laurel/banner（字段缺失/非法时跳过该图元）"""
+    """纹章装饰原语：bezier/star/sunburst/laurel/banner + 有机原语 blob/ribbon/flame/wing
+    （字段缺失/非法时跳过该图元）"""
     t = s.get("t")
     w = max(3, int((s.get("w") or 10) * canvas_px / 1000))
     sc = lum_color(float(s.get("stroke") or 0.22), s)
+    if t == "blob":
+        pts = _blob_points(s)
+        d.polygon(pts, fill=lum_color(float(s["fill"]), s) if s.get("fill") is not None else None,
+                  outline=sc, width=w)
+        return
+    if t == "ribbon":
+        pts, spine = _ribbon_points(s)
+        if s.get("fill") is not None:
+            d.polygon(pts, fill=lum_color(float(s["fill"]), s), outline=sc, width=max(2, w - 4))
+        d.line(spine, fill=sc, width=w, joint="curve")
+        return
+    if t == "flame":
+        pts = _flame_points(s)
+        d.polygon(pts, fill=lum_color(float(s["fill"]), s) if s.get("fill") is not None else None,
+                  outline=sc, width=w)
+        return
+    if t == "wing":
+        _draw_wing(d, s, sc, s.get("fill") is not None, w)
+        return
     if t == "bezier":
         pts = _sample_bezier(tuple(s["p0"]), tuple(s["p1"]), tuple(s["p2"]),
                              tuple(s["p3"]))
@@ -342,6 +473,13 @@ def render_emblem(design_json, tone="silver", canvas_px=1000, style="lineart",
                 d0.ellipse([cx - r, cy - r, cx + r, cy + r], fill=255)
             elif t == "rect":
                 d0.rectangle([s["x0"], s["y0"], s["x1"], s["y1"]], fill=255)
+            elif t == "blob":
+                d0.polygon(_blob_points(s), fill=255)
+            elif t == "ribbon":
+                pts, _spine = _ribbon_points(s)
+                d0.polygon(pts, fill=255)
+            elif t == "flame":
+                d0.polygon(_flame_points(s), fill=255)
             else:
                 continue
         except (KeyError, TypeError, ValueError, IndexError) as e:
@@ -382,7 +520,7 @@ def render_emblem(design_json, tone="silver", canvas_px=1000, style="lineart",
         for s in shapes:
             t = s.get("t")
             fill = s.get("fill")
-            if fill is None or t not in ("poly", "circle", "rect"):
+            if fill is None or t not in ("poly", "circle", "rect", "blob", "ribbon", "flame"):
                 continue
             col = _lum_color(float(fill), pal, polarity) + (255,)
             try:
@@ -393,6 +531,13 @@ def render_emblem(design_json, tone="silver", canvas_px=1000, style="lineart",
                     dfl.ellipse([cx - r, cy - r, cx + r, cy + r], fill=col)
                 elif t == "rect":
                     dfl.rectangle([s["x0"], s["y0"], s["x1"], s["y1"]], fill=col)
+                elif t == "blob":
+                    dfl.polygon(_blob_points(s), fill=col)
+                elif t == "ribbon":
+                    pts, _spine = _ribbon_points(s)
+                    dfl.polygon(pts, fill=col)
+                elif t == "flame":
+                    dfl.polygon(_flame_points(s), fill=col)
             except (KeyError, TypeError, ValueError, IndexError) as e:
                 print(f"[warn] 跳过无法解析的填充图元（{e}）: {str(s)[:120]}", file=sys.stderr)
                 continue
@@ -405,7 +550,8 @@ def render_emblem(design_json, tone="silver", canvas_px=1000, style="lineart",
     shc = (18, 24, 32, 150)
     for s in shapes:
         t = s.get("t")
-        if t in ("bezier", "star", "sunburst", "laurel", "banner"):
+        if t in ("bezier", "star", "sunburst", "laurel", "banner",
+                 "blob", "ribbon", "wing", "flame"):
             try:
                 _draw_ornament(sd, s, lam, canvas_px)
             except (KeyError, TypeError, ValueError, IndexError, ZeroDivisionError) as e:
