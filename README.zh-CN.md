@@ -23,7 +23,7 @@
 | `engine/emblem_render.py` | 把 AI 设计的几何图元 JSON 渲染上章面 |
 | `engine/design_emblem.py` | OpenAI 兼容视觉 API 适配器：照片 → 设计稿 JSON（给无视觉能力的 agent 环境） |
 | `engine/batch_test.py` / `engine/gen_designs.py` | 真实照片压测工装 / 程序化纹章设计稿生成器 |
-| `web/index.html` | 单文件网页工具（拖拽/调参/下载）——当前为早期模板版本，新版模板（终末地重做 + 糖果风）移植中 |
+| `web/index.html` | 单文件网页工具（拖拽/调参/下载）——终末地重做 + 糖果风已移植，品阶/形制家族与引擎逐项对齐 |
 | `PROMPTS.md` | 自包含操作手册：设计提示词模板、质检清单、参数速查 |
 | `NANO_PROMPTS.md` | 自包含起手文档：一句话 → Google nano banana 可用的生图提示词（无需引擎） |
 | `PORTING.md` | 移植计划（技术方向规划，实施时间未定） |
@@ -36,9 +36,9 @@
 | 风格 | 品阶 | 主管线 | 状态 |
 |---|---|---|---|
 | 方舟（哑光金属） | `silver` / `plated` / `gold`（另有 `stamp`） | AI 纹章设计 → 渲染；离线兜底 `line`/`silhouette`/`facet`/`icon` | ✅ 已实现 |
-| 终末地（阳极氧化金属） | `silver` / `gold` / `iridescent` | 同上 | ✅ 已实现 |
+| 终末地（阳极氧化金属） | `silver` / `gold_pure` / `gold_plated` / `dark` / `bronze` / `pearl` | 色场数据驱动 + story/combat/industry 形制家族 | ✅ 已实现 |
 | 糖果贴纸 | — | 同上 | ✅ 已实现 |
-| 网页工具新版模板移植（终末地重做 + 糖果风） | — | — | ⏳ 计划中 |
+| 网页工具新版模板（终末地重做 + 糖果风） | 同引擎 | 单文件网页工具，品阶/家族与引擎逐项对齐 | ✅ 已实现 |
 
 仅标注 **已实现** 的行为当前树中可用；计划项是方向，不是发布承诺。
 
@@ -176,7 +176,8 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
 | 参数 | 范围 | 说明 |
 |---|---|---|
 | `--style` | arknights / endfield / candy | 章体模板 |
-| `--tone` | 方舟 silver/plated/gold/stamp；终末地 silver/gold/iridescent | 品阶 |
+| `--tone` | 方舟 silver/plated/gold/stamp；终末地 silver/gold/dark/pearl | 品阶 |
+| `--endfield-family` | story / combat | 终末地形制家族（story 陈列金章 / combat 计数章） |
 | `--text` | ≤8 字为宜 | 主铭文 |
 | `--subtitle` | 可选 | 顶部标签 |
 | `--serial` | 可选 | 编号注释 |
@@ -194,17 +195,16 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
 ## 已知边界
 
 - 经典抠图对「主体清晰 + 背景简洁」效果最好；低置信自动整图回退（圆角羽化）并提示。
-- 网页工具仍是早期模板版本；新版模板（终末地重做 + 糖果风）尚未移植。
-- 网页工具优先加载 `web/vendor/` 内的抠图模型副本；版本锁定的公共 CDN（esm.sh / jsDelivr / unpkg）仅在副本缺失时回退。
+- 网页工具优先加载 `web/vendor/` 内的抠图模型副本；版本锁定的公共 CDN（esm.sh / jsDelivr / unpkg）仅在副本缺失时回退。用 `python -m http.server` 本地预览时，`.mjs` 会被 serve 成 `text/plain` 致浏览器内 AI 抠图模块加载失败、自动降级经典抠图（章体渲染不受影响）；需 AI 抠图时用能正确 serve ES module 的静态服务器。
 - 超过 80MP 的输入会被直接拒绝（解压炸弹防护）；网页端输入会先降到 4096px 再处理。
 - 字体以 Windows 系统字体为主，mac/Linux 回退计划中（见 `PORTING.md`）。
+- 方舟 `stamp` 朱砂档仅引擎 `--mode emblem`（AI 设计稿）路径支持；网页工具无 AI 设计稿入口，故不暴露该档的完整效果。
 
 ## Roadmap
 
 计划方向，非发布承诺：
 
-1. 网页工具新版模板移植（终末地重做 + 糖果风）。
-2. 字体跨平台兜底（mac/Linux）。
+1. 字体跨平台兜底（mac/Linux）。
 
 ## 更多文档
 

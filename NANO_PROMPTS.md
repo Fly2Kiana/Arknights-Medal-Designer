@@ -48,7 +48,10 @@ and signature color traits），让执行 AI 基于原设判断；同时保留 �
 | 明日方舟·晋升银章 | Arknights promotion medal: pointy-top regular hexagon (width:height ≈ 0.87), matte slate-blue metal field with fine halftone dot texture, 3–4 concentric engraved rings, silver-white etched emblem, embedded horizontal text band |
 | 明日方舟·镀层章 | 同上 + iridescent holographic film on the rim and emblem outline only |
 | 明日方舟·活动金章 | pale cream enamel field, deep bronze-gold engraved lines, a ring of small five-pointed stars inside the border |
-| 终末地·银/金/炫彩 | Endfield anodized metal medal: pointy-top hexagon, single thin dark outline, top rectangular hanger loop, brushed-metal anisotropic sheen with a mirror highlight band; gold = warm copper tint; iridescent = full-face spectral rainbow film (orange→chartreuse→teal→violet→pink) |
+| 终末地·银 | Endfield anodized medal: pointy-top hexagon, cool dark-gray brushed metal, thin dark outline, top nameplate with four corner rivets, light-silver engraved emblem |
+| 终末地·纯金 | matte amber-gold field, lighting from top-right fading to bottom-left, cream engraved emblem, corner engineering annotations |
+| 终末地·镀彩金 | gold field flowing to green and vivid orange at the sides, cream emblem, thin red accent line across the center |
+| 终末地·珠光镀层 | white pearlescent base with soft iridescent patches (rose left, mint top, cyan band, lavender bottom), dark-gray engraved emblem |
 | 糖果贴纸章 | candy sticker badge: die-cut white sticker border, pastel field, cream/gold/wine triple ring, stitched seam, rounded name bubble with the subject's name |
 
 明度纪律（纹章主体）：三档硬明度 **0.22（暗线）/ 0.55（中调）/ 0.88（亮面）**，
@@ -70,7 +73,7 @@ symmetric or X-axis composition. Use only three hard luminance levels (0.22 dark
 0.55 midtone, 0.88 bright surface). {主体专属特征：从§一对应行的要点展开}
 
 [第3段·章面细节]
-{按所选风格补全：套环/网点/字带/挂扣/虹彩镀膜…… 引用§二定义中未用尽的要素}
+{按所选风格补全：套环/网点/字带/章内铭牌框/虹彩镀膜…… 引用§二定义中未用尽的要素}
 Inscription: “{主铭文}” on the embedded text band; optional top tag “{副标}”.
 All text short, centered, cleanly letter-spaced.
 
@@ -138,7 +141,7 @@ clean background outside the silhouette. No photorealistic fur, no watermark, no
 ```text
 You are a game medal engraver. Create ONE image: an Endfield anodized medal — pointy-top
 hexagon, single thin dark outline, top rectangular hanger loop, brushed-metal sheen with a
-mirror highlight band, covered by a spectral iridescent film (orange→chartreuse→teal→violet→pink).
+white pearlescent base with soft iridescent patches (rose, mint, cyan, lavender) and a dark-gray engraved emblem.
 The medal commemorates: a folding umbrella photographed against the sky.
 Translate, do not trace: reduce the umbrella to its iconic open-canopy silhouette with a
 curved handle, centered, X-symmetric, 55% of the face; engraved dark lines over the metal.

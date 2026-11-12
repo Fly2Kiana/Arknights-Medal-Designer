@@ -103,7 +103,7 @@
 python engine/badge_engine.py <输入> -o <输出.png>
   --style arknights|endfield|candy      # 官方金属 / 终末地 / 糖果贴纸
   --tone silver|plated|gold|stamp       # 方舟品阶（stamp=朱砂印章）
-        silver|gold|iridescent          # 终末地品阶（银/金/炫彩）
+        silver|gold_pure|gold_plated|dark|pearl   # 终末地品阶（银/纯金/镀彩金/深灰排名/珠光镀层）
   --mode emblem|line|icon|facet|silhouette   # emblem=AI设计稿主路径
   --emblem-design <设计稿.json>          # 配合 --mode emblem
   --emblem-style lineart|flat           # 蚀刻线稿 / 扁平填充

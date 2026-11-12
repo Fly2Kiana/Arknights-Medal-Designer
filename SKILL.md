@@ -45,7 +45,7 @@ description: 将用户上传的照片自动制作成《明日方舟》或《明�
    `icon` 图标化兜底。
 4. **章体合成**：
    - `arknights`：`silver` / `plated`（整面全息镀膜）/ `gold`（活动金章）/ `stamp`（朱砂印章）
-   - `endfield`：`silver` → `gold` → `iridescent` 三阶进化；章面文字极简
+   - `endfield` 五档品阶（色场数据驱动）：`silver` 银色（深冷灰）→ `gold_pure` 纯金 → `gold_plated` 镀彩金 → `dark` 深灰排名章（#N）→ `pearl` 珠光镀层；形制家族 `--endfield-family story|combat`；章面文字极简
    - `candy`：糖果贴纸章（白胶边/三色环/缝线/名字气泡）
 
 ## 如何调用
@@ -60,7 +60,7 @@ python "<skill目录>/engine/badge_engine.py" "<输入照片路径>" -o "<输出
 
 参数说明：
 - `--style`：`arknights`（默认）| `endfield` | `candy`
-- `--tone`：方舟 `silver|plated|gold|stamp`；终末地 `silver|gold|iridescent`
+- `--tone`：方舟 `silver|plated|gold|stamp`；终末地 `silver|gold_pure|gold_plated|dark|pearl`
 - `--text`：主铭文（建议 ≤8 字）；`--subtitle`：顶部标签；`--serial`：编号；`--number`：数字层级
 - `--line-strength`：0.4~1.8；`--detail`：0.5~2.0；`--matting-tol`：18~34（默认 26）
 - `--no-matting`：跳过抠图整图入章
