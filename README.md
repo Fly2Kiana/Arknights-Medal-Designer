@@ -23,11 +23,11 @@ Turn any photo into a stylized *Arknights* / *Arknights: Endfield* medal (蚀刻
 | `engine/emblem_render.py` | Renders the AI-designed geometric emblem JSON onto the medal face |
 | `engine/design_emblem.py` | OpenAI-compatible vision API adapter: photo → design JSON (for agent environments without built-in vision) |
 | `engine/batch_test.py` / `engine/gen_designs.py` | Real-photo stress-test rig / procedural emblem-design generator |
-| `web/index.html` | Single-file web tool (drag, tune, download) — Endfield rework + candy ported; tiers/shape families aligned with the engine item by item |
-| `PROMPTS.md` | Self-contained operator manual: design prompt template, QC checklist, parameter reference |
+| `web/index.html` | Single-file web tool (drag, tune, download) — Endfield + candy styles; tiers and shape families aligned with the engine |
+| `PROMPTS.md` | Usage & prompt guide: design principles, self-check, parameter reference |
 | `NANO_PROMPTS.md` | Self-contained playbook: turn a one-sentence request into a ready-to-use image prompt for Google nano banana (no engine needed) |
 | `PORTING.md` | Porting plan to other agent environments (technical direction plan; schedule not yet set) |
-| `reference/` | Research fetch scripts (regenerate the downloaded study material) and `DESIGN_SPEC.md` (design research notes) |
+| `reference/` | Research fetch scripts (regenerate the downloaded study material) and `DESIGN_SPEC.md` (design language) |
 | `samples/` | Test inputs |
 | `output/` | Runtime output directory (gitignored; generated locally) |
 
@@ -38,13 +38,13 @@ Turn any photo into a stylized *Arknights* / *Arknights: Endfield* medal (蚀刻
 | Arknights (matte metal) | `silver` / `plated` / `gold` (+ `stamp`) | AI emblem design → render; offline fallback `line`/`silhouette`/`facet`/`icon` | ✅ Implemented |
 | Endfield (anodized metal) | `silver` / `gold_pure` / `gold_plated` / `dark` / `bronze` / `pearl` | data-driven color fields, story/combat/industry shape families | ✅ Implemented |
 | Candy sticker | — | same as the Arknights row | ✅ Implemented |
-| Web tool newer templates (Endfield rework + candy) | same as engine | single-file web tool, tiers/families aligned with the engine item by item | ✅ Implemented |
+| Web tool (Endfield + candy) | same as engine | single-file web tool, tiers/families aligned with the engine | ✅ Implemented |
 
 Only rows marked **Implemented** ship in the current tree. Planned entries are directions, not release commitments.
 
 ## Installation
 
-Prepare the environment first: you need **Python 3.10+** with `pip`, and a supported consumer — a DSH agent session (for the skill), any browser (for the web tool), or a terminal (for the CLI). numpy and Pillow are the only runtime dependencies; no GPU is required.
+Prepare the environment first: you need **Python 3.10+** with `pip`, and a supported consumer — an AI-agent session (for the skill), any browser (for the web tool), or a terminal (for the CLI). numpy and Pillow are the only runtime dependencies; no GPU is required.
 
 ### Install with your AI agent
 
@@ -55,8 +55,8 @@ Install Arknights Medal Designer from https://github.com/Fly2Kiana/Arknights-Med
 Check Python 3.10+ and pip first. Clone it into a location I approve, run
 pip install -r requirements.txt, then run the smoke test:
 python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style arknights
-and confirm the pointy-top hexagon, the concentric rings, and the text band look right per the
-PROMPTS.md §三 checklist. Do not run the fetch scripts under reference/ (research-only, they
+and confirm the pointy-top hexagon, the concentric rings, and the text band look right per
+PROMPTS.md. Do not run the fetch scripts under reference/ (research-only, they
 download third-party material). Do not start the web server for me. Tell me when it is
 installed and tested.
 ```
@@ -87,11 +87,11 @@ installed and tested.
    python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style arknights
    ```
 
-   The generated `output/smoke.png` should show a pointy-top hexagon with multi-layer concentric rings, a halftone matte field, an etched sword emblem, and a centered text band. Compare against the checklist in `PROMPTS.md` §三 (candy ≥ 0.85 / metal ≥ 0.85 / game-association ≥ 0.7). `output/` is a local runtime directory; the repository does not ship generated images.
+   The generated `output/smoke.png` should show a pointy-top hexagon with multi-layer concentric rings, a halftone matte field, an etched sword emblem, and a centered text band. Compare against the checklist in `PROMPTS.md`. `output/` is a local runtime directory; the repository does not ship generated images.
 
 4. Use it through one of the three entry points.
 
-   **As a DSH agent skill** (chat-in, medal-out):
+   **As an AI-agent skill** (chat-in, medal-out):
 
    ```powershell
    Copy-Item -Recurse this-folder "$env:USERPROFILE\.agents\skills\arknights-medal-designer"
@@ -148,7 +148,7 @@ model directories anytime by updating the variables; the code never hardcodes a 
    portable Ollama anywhere, point `OLLAMA_MODELS` at your model directory, pull a vision model:
 
    ```powershell
-   $env:OLLAMA_MODELS='D:\ollama_models'          # any directory you like; move freely
+   $env:OLLAMA_MODELS='<your-model-directory>'    # any directory you like; move freely
    ollama pull qwen2.5vl:7b                       # ~6 GB; 3B tier also works
    ollama serve                                   # OpenAI-compatible API on 127.0.0.1:11434
    ```
@@ -166,7 +166,7 @@ model directories anytime by updating the variables; the code never hardcodes a 
 
    ```powershell
    $env:MEDAL_AI_MATTING='1'
-   $env:MEDAL_MATTING_MODEL='D:\medal_models\silueta.onnx'   # any location
+   $env:MEDAL_MATTING_MODEL='<path-to-matting-model.onnx>'   # any location
    ```
 
    Unavailable or failing → the engine silently falls back to the classic matting.
@@ -192,9 +192,9 @@ See `--list-types` for the full catalogue of medal types (style × tone × mode)
 | `--detail` | 0.5–2.0 | hatch/detail density |
 | `--matting-tol` | 18–34 | matting tolerance; lower for cluttered backgrounds |
 
-## Quality bar
+## Quality
 
-Visual acceptance (per `PROMPTS.md` §三): candy ≥ 0.85 / metal ≥ 0.85 / game-association ≥ 0.7.
+Every output is checked against the visual standards in [references/quality-gate.md](references/quality-gate.md) before delivery: a clean regular hexagon, the style's signature features, a designed-looking emblem, centered legible text, and the correct finish.
 
 ## Known boundaries
 
@@ -212,11 +212,11 @@ Planned directions, not release commitments:
 
 ## More documentation
 
-- [PROMPTS.md](PROMPTS.md) — operator manual and QC checklist
+- [PROMPTS.md](PROMPTS.md) — usage & prompt guide
 - [NANO_PROMPTS.md](NANO_PROMPTS.md) — one-sentence → nano banana image-prompt playbook
 - [SKILL.md](SKILL.md) — agent skill definition
 - [PORTING.md](PORTING.md) — porting plan
-- [reference/DESIGN_SPEC.md](reference/DESIGN_SPEC.md) — design research notes
+- [reference/DESIGN_SPEC.md](reference/DESIGN_SPEC.md) — design language
 - [CHANGELOG.md](CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [SUPPORT.md](SUPPORT.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [NOTICE](NOTICE)
 
 ## License

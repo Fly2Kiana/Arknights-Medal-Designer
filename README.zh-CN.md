@@ -23,11 +23,11 @@
 | `engine/emblem_render.py` | 把 AI 设计的几何图元 JSON 渲染上章面 |
 | `engine/design_emblem.py` | OpenAI 兼容视觉 API 适配器：照片 → 设计稿 JSON（给无视觉能力的 agent 环境） |
 | `engine/batch_test.py` / `engine/gen_designs.py` | 真实照片压测工装 / 程序化纹章设计稿生成器 |
-| `web/index.html` | 单文件网页工具（拖拽/调参/下载）——终末地重做 + 糖果风已移植，品阶/形制家族与引擎逐项对齐 |
-| `PROMPTS.md` | 自包含操作手册：设计提示词模板、质检清单、参数速查 |
+| `web/index.html` | 单文件网页工具（拖拽/调参/下载）——终末地 + 糖果风，品阶/形制家族与引擎对齐 |
+| `PROMPTS.md` | 用法与提示词指南：设计原则、成品自检、参数速查 |
 | `NANO_PROMPTS.md` | 自包含起手文档：一句话 → Google nano banana 可用的生图提示词（无需引擎） |
 | `PORTING.md` | 移植计划（技术方向规划，实施时间未定） |
-| `reference/` | 考据抓取脚本（可再生成研究素材）+ `DESIGN_SPEC.md`（考据结论） |
+| `reference/` | 研究抓取脚本（可再生成研究素材）+ `DESIGN_SPEC.md`（设计语言） |
 | `samples/` | 测试素材 |
 | `output/` | 运行时输出目录（gitignore，本地生成） |
 
@@ -38,13 +38,13 @@
 | 方舟（哑光金属） | `silver` / `plated` / `gold`（另有 `stamp`） | AI 纹章设计 → 渲染；离线兜底 `line`/`silhouette`/`facet`/`icon` | ✅ 已实现 |
 | 终末地（阳极氧化金属） | `silver` / `gold_pure` / `gold_plated` / `dark` / `bronze` / `pearl` | 色场数据驱动 + story/combat/industry 形制家族 | ✅ 已实现 |
 | 糖果贴纸 | — | 同上 | ✅ 已实现 |
-| 网页工具新版模板（终末地重做 + 糖果风） | 同引擎 | 单文件网页工具，品阶/家族与引擎逐项对齐 | ✅ 已实现 |
+| 网页工具（终末地 + 糖果风） | 同引擎 | 单文件网页工具，品阶/家族与引擎对齐 | ✅ 已实现 |
 
 仅标注 **已实现** 的行为当前树中可用；计划项是方向，不是发布承诺。
 
 ## 安装
 
-先备好环境：**Python 3.10+**（含 pip），以及任一使用入口——DSH agent 会话（skill 用法）、任意浏览器（网页工具）或终端（CLI）。运行期仅依赖 numpy + Pillow，无需 GPU。
+先备好环境：**Python 3.10+**（含 pip），以及任一使用入口——AI agent 会话（skill 用法）、任意浏览器（网页工具）或终端（CLI）。运行期仅依赖 numpy + Pillow，无需 GPU。
 
 ### 交给 AI agent 安装
 
@@ -55,7 +55,7 @@
 先检查 Python 3.10+ 与 pip。克隆到我同意的位置，运行 pip install -r requirements.txt，
 然后跑冒烟测试：
 python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style arknights
-并按 PROMPTS.md §三 质检清单核对尖角六边形、同心套环与字带是否正常。
+并按 PROMPTS.md 核对尖角六边形、同心套环与字带是否正常。
 不要运行 reference/ 下的抓取脚本（仅研究用，会下载第三方素材）。不要替我启动网页服务器。
 装好并测试通过后告诉我。
 ```
@@ -86,11 +86,11 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
    python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style arknights
    ```
 
-   生成的 `output/smoke.png` 应呈现：尖角正六边形 + 多层同心细线套环 + 哑光网点底 + 蚀刻剑纹章 + 居中横幅字带；对照 `PROMPTS.md` §三 清单逐项核对（糖果 ≥0.85 / 金属 ≥0.85 / 游戏关联 ≥0.7）。`output/` 是本地运行时目录，仓库不附带生成图。
+   生成的 `output/smoke.png` 应呈现：尖角正六边形 + 多层同心细线套环 + 哑光网点底 + 蚀刻剑纹章 + 居中横幅字带；对照 `PROMPTS.md` 逐项核对。`output/` 是本地运行时目录，仓库不附带生成图。
 
 4. 三选一使用。
 
-   **DSH agent skill（对话内直接出图）**：
+   **AI agent skill（对话内直接出图）**：
 
    ```powershell
    Copy-Item -Recurse this-folder "$env:USERPROFILE\.agents\skills\arknights-medal-designer"
@@ -136,7 +136,7 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
    Remove-Item -Recurse -Force "$env:USERPROFILE\.agents\skills\arknights-medal-designer"
    ```
 
-   `reference/` 下的抓取脚本仅供研究，会下载第三方考据素材，日常使用不需要它们。切勿提交或传播经它处理的他人照片。
+   `reference/` 下的抓取脚本仅供研究，会下载第三方研究素材，日常使用不需要它们。切勿提交或传播经它处理的他人照片。
 
 ### 全本地模式（本地视觉模型 + 本地抠图）
 
@@ -145,7 +145,7 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
 1. **本地视觉模型**（无云端往返地产出设计稿 JSON）。便携安装 Ollama 到任意位置，`OLLAMA_MODELS` 指向模型目录后拉取视觉模型：
 
    ```powershell
-   $env:OLLAMA_MODELS='D:\ollama_models'          # 任意目录，可自由挪动
+   $env:OLLAMA_MODELS='<你的模型目录>'          # 任意目录，可自由挪动
    ollama pull qwen2.5vl:7b                       # ~6 GB；3B 档也可用
    ollama serve                                   # 127.0.0.1:11434 提供 OpenAI 兼容 API
    ```
@@ -162,7 +162,7 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
 
    ```powershell
    $env:MEDAL_AI_MATTING='1'
-   $env:MEDAL_MATTING_MODEL='D:\medal_models\silueta.onnx'   # 任意位置
+   $env:MEDAL_MATTING_MODEL='<抠图模型.onnx 路径>'   # 任意位置
    ```
 
    不可用或失败时引擎静默回退经典抠图。
@@ -188,9 +188,9 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
 | `--detail` | 0.5–2.0 | 细节/排线密度 |
 | `--matting-tol` | 18–34 | 抠图容差，背景杂乱调低 |
 
-## 质量基线
+## 质量
 
-视觉验收（`PROMPTS.md` §三）：糖果 ≥0.85 / 金属 ≥0.85 / 游戏关联 ≥0.7。
+每张成品交付前都对照 [references/quality-gate.md](references/quality-gate.md) 的视觉标准自检：干净的尖角正六边形、风格识别特征、设计感的纹章、居中清晰的铭文与正确的品阶。
 
 ## 已知边界
 
@@ -208,11 +208,11 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
 
 ## 更多文档
 
-- [PROMPTS.md](PROMPTS.md) —— 操作手册与质检清单
+- [PROMPTS.md](PROMPTS.md) —— 用法与提示词指南
 - [NANO_PROMPTS.md](NANO_PROMPTS.md) —— 一句话 → nano banana 生图提示词起手文档
 - [SKILL.md](SKILL.md) —— skill 定义
 - [PORTING.md](PORTING.md) —— 移植计划
-- [reference/DESIGN_SPEC.md](reference/DESIGN_SPEC.md) —— 考据结论
+- [reference/DESIGN_SPEC.md](reference/DESIGN_SPEC.md) —— 设计语言
 - [CHANGELOG.md](CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [SUPPORT.md](SUPPORT.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [NOTICE](NOTICE)
 
 ## License

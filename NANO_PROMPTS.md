@@ -1,10 +1,9 @@
 # NANO_PROMPTS.md · 一句话 → nano banana 蚀刻章生图提示词（自包含起手文档）
 
-> 用途：把本文件（全文或按需摘录）交给**任意** agent / 网页端 AI（Gemini、GPT、Claude、DSH、
-> codex……），它即可把用户的一句话需求转写成一条**完整、可直接投给 Google nano banana
+> 用途：把本文件（全文或按需摘录）交给**任意** agent / 网页端 AI（Gemini、GPT、Claude
+> 等），它即可把用户的一句话需求转写成一条**完整、可直接投给 Google nano banana
 > （Gemini 图像模型）的生图提示词**。用户可另附参考图（可选）。
-> 本文件自包含：不依赖其它文档即可执行；设计语言与 `PROMPTS.md` 同源（PRTS 公开素材考据）。
-> 方法论骨架来自《AI 提示词工程师规则 v2》（角色锚定 / 条件-动作句式 / 参数化模块 / 防护约束）。
+> 本文件自包含：不依赖其它文档即可执行；设计语言与 `PROMPTS.md` 同源。
 
 ---
 
@@ -54,7 +53,7 @@ and signature color traits），让执行 AI 基于原设判断；同时保留 �
 | 终末地·珠光镀层 | white pearlescent base with soft iridescent patches (rose left, mint top, cyan band, lavender bottom), dark-gray engraved emblem |
 | 糖果贴纸章 | candy sticker badge: die-cut white sticker border, pastel field, cream/gold/wine triple ring, stitched seam, rounded name bubble with the subject's name |
 
-明度纪律（纹章主体）：三档硬明度 **0.22（暗线）/ 0.55（中调）/ 0.88（亮面）**，
+明度（纹章主体）：只用三档——**暗线 / 中调 / 亮面**，避免平滑渐变；
 主体占章面中央约 55–65%，对称或 X 形中心对称构图。
 铭文：主铭文建议 ≤8 字（英文短语更稳），nano banana 对长文字易变形——必须提示
 "keep all inscription text short, centered, and letter-spaced"。
@@ -69,8 +68,8 @@ The medal commemorates: {用户主体的一句话描述}.
 [第2段·主体转译（核心）]
 Translate, do not trace: extract 1–2 signature traits of the subject and recompose them
 as a heraldic emblem at the center of the medal face, occupying 55–65% of the face,
-symmetric or X-axis composition. Use only three hard luminance levels (0.22 dark line,
-0.55 midtone, 0.88 bright surface). {主体专属特征：从§一对应行的要点展开}
+symmetric or X-axis composition. Use only three tonal levels (dark engraved line,
+midtone, bright surface), not a smooth gradient. {主体专属特征：从§一对应行的要点展开}
 
 [第3段·章面细节]
 {按所选风格补全：套环/网点/字带/章内铭牌框/虹彩镀膜…… 引用§二定义中未用尽的要素}
@@ -98,8 +97,8 @@ outside the medal silhouette. Strictly follow the DO-NOT list below.
 1. **最终提示词**（代码块包裹的英文正文，四段结构 + 约束段）；
 2. **中文说明**：所选风格/品阶、主体转译要点、参考图处理方式（若有）；
 3. **参数化模块**（可选，用户提到"可调参数/滑块/@param"时才输出）：
-   按《AI 提示词工程师规则 v2》方案 A 的 `// MODULE_START` 结构输出（如 etch_line_strength、
-   holographic_intensity、halftone_opacity，均 0–1 并带 `_desc` 中文说明）；
+   以 `// MODULE_START` 结构输出（如 etch_line_strength、holographic_intensity、
+   halftone_opacity，均 0–1 并带 `_desc` 中文说明）；
 4. **迭代入口**：一句话告知"不满意直接说哪里不对，我按修正语法改"。
 
 ## 六、修正语法（用户反馈后使用，禁止整体重写）
@@ -131,8 +130,8 @@ regular hexagon (width:height ≈ 0.87), matte slate-blue metal field with fine 
 three concentric engraved rings, silver-white etched emblem, embedded horizontal text band.
 The medal commemorates: a beloved orange tabby cat.
 Translate, do not trace: extract the cat's round face, folded ears and tabby stripes as a
-symmetric heraldic head emblem at the center, occupying 60% of the face; three hard luminance
-levels only (0.22 / 0.55 / 0.88); whiskers simplified to three engraved strokes per side.
+symmetric heraldic head emblem at the center, occupying 60% of the face; three tonal levels
+only (dark line / midtone / bright surface); whiskers simplified to three engraved strokes per side.
 Inscription: “大橘” on the text band; top tag “ROSMONTIS”. Square 1:1, hexagon centered,
 clean background outside the silhouette. No photorealistic fur, no watermark, no gibberish text.
 ```
@@ -140,13 +139,14 @@ clean background outside the silhouette. No photorealistic fur, no watermark, no
 **例 B**「终末地炫彩章，主体是我拍的那把伞」→
 ```text
 You are a game medal engraver. Create ONE image: an Endfield anodized medal — pointy-top
-hexagon, single thin dark outline, top rectangular hanger loop, brushed-metal sheen with a
-white pearlescent base with soft iridescent patches (rose, mint, cyan, lavender) and a dark-gray engraved emblem.
+hexagon, single thin dark outline, a small rectangular nameplate inside the top of the hexagon,
+brushed-metal sheen with a white pearlescent base with soft iridescent patches (rose, mint,
+cyan, lavender) and a dark-gray engraved emblem.
 The medal commemorates: a folding umbrella photographed against the sky.
 Translate, do not trace: reduce the umbrella to its iconic open-canopy silhouette with a
 curved handle, centered, X-symmetric, 55% of the face; engraved dark lines over the metal.
-Inscription: “雨具承包商”; note the hanger loop must stay visible. Square 1:1. DO NOT cover
-the emblem outline with the film — iridescent layer at 40% opacity, uniform.
+Inscription: “雨具承包商”; note the top nameplate must stay visible. Square 1:1. Keep the
+iridescent film soft and even, leaving the engraved emblem readable.
 ```
 
 **例 C**「金章，纪念我通关的那次肉鸽，主题是一把剑」→
