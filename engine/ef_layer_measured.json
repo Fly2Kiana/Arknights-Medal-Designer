@@ -22,6 +22,17 @@
     ],
     "dark_share_medals": 10,
     "feed_rgb": null,
+    "l4bis": {
+     "amp": null,
+     "applies": true,
+     "c_val": null,
+     "direction": null,
+     "feed_rgb": null,
+     "gap": null,
+     "mark": "死(a)-两向都不过（c_dark=-0.075 c_light=0.059，contra=0.08）",
+     "passed": false,
+     "share": null
+    },
     "light_lum": 0.369,
     "light_rgb": [
      87,
@@ -278,6 +289,17 @@
     ],
     "dark_share_medals": 18,
     "feed_rgb": null,
+    "l4bis": {
+     "amp": -0.011,
+     "applies": true,
+     "c_val": -0.095,
+     "direction": "dark",
+     "feed_rgb": null,
+     "gap": 0.225,
+     "mark": "死(bc)：向=dark (b)0.29/0.5 (c)gap=0.225/0.3 (d)-0.011/±0.05",
+     "passed": false,
+     "share": 0.29
+    },
     "light_lum": 0.786,
     "light_rgb": [
      200,
@@ -538,6 +560,17 @@
      119,
      128
     ],
+    "l4bis": {
+     "amp": null,
+     "applies": false,
+     "c_val": null,
+     "direction": null,
+     "feed_rgb": null,
+     "gap": null,
+     "mark": "不适用（极性判定为 dark）",
+     "passed": false,
+     "share": null
+    },
     "light_lum": 0.857,
     "light_rgb": [
      206,
@@ -793,7 +826,26 @@
      163
     ],
     "dark_share_medals": 11,
-    "feed_rgb": null,
+    "feed_rgb": [
+     154,
+     158,
+     163
+    ],
+    "l4bis": {
+     "amp": 0.024,
+     "applies": true,
+     "c_val": -0.22,
+     "direction": "dark",
+     "feed_rgb": [
+      154,
+      158,
+      163
+     ],
+     "gap": 0.529,
+     "mark": "PASS：向=dark (b)0.529/0.5 (c)gap=0.529/0.3 (d)+0.024/±0.05",
+     "passed": true,
+     "share": 0.529
+    },
     "light_lum": 0.831,
     "light_rgb": [
      204,
@@ -1054,6 +1106,17 @@
      134,
      52
     ],
+    "l4bis": {
+     "amp": null,
+     "applies": false,
+     "c_val": null,
+     "direction": null,
+     "feed_rgb": null,
+     "gap": null,
+     "mark": "不适用（极性判定为 dark）",
+     "passed": false,
+     "share": null
+    },
     "light_lum": 0.808,
     "light_rgb": [
      206,
@@ -1310,6 +1373,17 @@
      190,
      190
     ],
+    "l4bis": {
+     "amp": null,
+     "applies": false,
+     "c_val": null,
+     "direction": null,
+     "feed_rgb": null,
+     "gap": null,
+     "mark": "不适用（极性判定为 dark）",
+     "passed": false,
+     "share": null
+    },
     "light_lum": 0.898,
     "light_rgb": [
      187,
@@ -1548,7 +1622,7 @@
    "ef_silver→collection/silver": "银档无 showcase 样本（0 枚）",
    "showcase/gold→ef_gold": "陈列大图镀彩金"
   },
-  "caliber": "lum=rgb.max(2)；ratio/delta 一律相对同枚章面 (zone & ~guard)，ratio_vs_zone 另给不含描边的纯章面分母；edge=alpha&~inner（描边环）；plate/corner/lowdot 收 rho<=0.93 且排纹章领地，笔画阈值 |resid|>0.05（装饰层用绝对档）；反差 c_dark/c_light = 过线像元 lum − 同 bin 底电平（resid 中位 r_dark/r_light 只作参考，它被 k=61 局部底压扁）；铭牌面板另用 plate−plate_ref 去打光梯度",
+  "caliber": "lum=rgb.max(2)；ratio/delta 一律相对同枚章面 (zone & ~guard)，ratio_vs_zone 另给纯 zone 分母；edge=alpha&~inner（描边环）；plate/corner/lowdot 收 rho<=0.93 且排纹章领地，笔画判定 |resid|>0.05（装饰层用绝对档）；反差 c_dark/c_light = 过线像元 lum − 同 bin 底电平（resid 中位 r_dark/r_light 只作参考，它被 k=61 局部底压扁）；铭牌面板另用 plate−plate_ref 去打光梯度",
   "caveats": [
    "collection/dark/plate: 仪器不可见（过线枚占比 暗 0%/亮 0%，笔画占比中位 0.4%） ⇒ 该层该组保持现常数",
    "collection/dark/corner: 枚间不一致-不可单常数化（过线枚占比 暗 36%/亮 27%，笔画占比中位 4.9%） ⇒ 该层该组保持现常数",
@@ -1556,19 +1630,34 @@
    "collection/gold/corner: 枚间不一致-不可单常数化（过线枚占比 暗 29%/亮 6%，笔画占比中位 1.6%） ⇒ 该层该组保持现常数",
    "collection/pearl/plate: 枚间不一致-不可单常数化（过线枚占比 暗 17%/亮 0%，笔画占比中位 0.0%） ⇒ 该层该组保持现常数",
    "collection/silver/plate: 枚间不一致-不可单常数化（过线枚占比 暗 18%/亮 6%，笔画占比中位 0.0%） ⇒ 该层该组保持现常数",
-   "collection/silver/corner: 枚间不一致-不可单常数化（过线枚占比 暗 53%/亮 0%，笔画占比中位 1.6%） ⇒ 该层该组保持现常数",
    "showcase/gold/plate: 枚间不一致-不可单常数化（过线枚占比 暗 30%/亮 15%，笔画占比中位 1.7%） ⇒ 该层该组保持现常数",
    "showcase/gold/lowdot: 枚间不一致-不可单常数化（过线枚占比 暗 55%/亮 15%，笔画占比中位 8.6%） ⇒ 该层该组保持现常数",
-   "showcase/pearl/plate: 枚间不一致-不可单常数化（过线枚占比 暗 30%/亮 0%，笔画占比中位 0.1%） ⇒ 该层该组保持现常数"
+   "showcase/pearl/plate: 枚间不一致-不可单常数化（过线枚占比 暗 30%/亮 0%，笔画占比中位 0.1%） ⇒ 该层该组保持现常数",
+   "collection/silver/corner: 枚间不一致-不可单常数化 → 极性判定通过：向=dark (b)0.529/0.5 (c)gap=0.529/0.3 (d)+0.024/±0.05，喂该向实测笔画色 [154, 158, 163]（落地只吃 corner）"
   ],
   "contra": 0.08,
-  "emit_cmd": "程序化采样自终末地游戏内截图（截图与量测脚本未随本包发布）",
+  "emit_cmd": "本地量测脚本生成（不随包发布）",
   "field_k": 61,
   "instrument_constants": {
    "c_dark_compression": "种 −0.12 的笔画反差量回 −0.098（k=61 局部底吸走 2px一阶的量）；种 −0.20 量回 −0.212 ⇒ 反差越大越准",
    "d_ref_null_reading": "面板**没提亮**的人造章上 d_ref 读 +0.016 ⇒ 素材侧|d_ref| ≤ 0.02 只能判「齐平」，不得读成「略亮」",
    "edge_min_resolvable_width_px": "描边窄于腐蚀核（3+R//120 = 6px @R=470）时比值偏亮：种 5.5px 读 0.781、种 ≥11px 收敛到0.764（真值 0.75）",
-   "edge_ratio_denominator": "描边比用 ratio_vs_face（分母排掉纹章领地）。人造章上含纹章的 zone 分母把描边比抬高 +0.040（0.764 → 0.804，已知答案自测报表末两列）"
+   "edge_ratio_denominator": "描边比用 ratio_vs_face（分母排掉纹章领地）。人造章上含纹章的 zone 分母把描边比抬高 +0.040（0.764 → 0.804）"
+  },
+  "l4bis_rule": {
+   "dryrun_cmd": "本地量测脚本干跑档（不随包发布）",
+   "gates": "(a) 恰有一向过 CONTRA；(b) 该向过线枚占比 ≥ min_share；(c) 两向过线枚占比之差 ≥ min_gap；(d) |候选笔画色电平 − 该向底电平 − c_向| ≤ max_amp_gap（电平口径 lum=rgb.max()/255，纪律 ⑫）",
+   "landed": [
+    "collection/silver/corner"
+   ],
+   "note": "过线 ⇒ feed_rgb = 该向素材笔画色中位（dark_rgb/light_rgb），不新造常数；不过 ⇒ feed_rgb 仍 null 且 l4bis.mark 记死在哪一条",
+   "scope": "只吃极性判「枚间不一致-不可单常数化」的格；**落地只在 corner 层**（证据可得性三条：plate 另有 d_ref_verdict 分支且铭牌已裁「不画文字」，lowdot 判 A 档不可验）",
+   "thresholds": {
+    "contra": 0.08,
+    "max_amp_gap": 0.05,
+    "min_gap": 0.3,
+    "min_share": 0.5
+   }
   },
   "min_mark_share": 0.005,
   "min_ok_share": 0.6,
@@ -1594,11 +1683,11 @@
    "silver": "collection/silver"
   },
   "rho_max": 0.93,
-  "ruler_cmd": "分带与逐页报表由量测脚本给出（脚本未随本包发布）",
-  "selftest_cmd": "已知答案自测：真值种进人造章（量测脚本未随本包发布）",
-  "selftest_gate": "已知答案对照（真值种进人造章）：--emit 必须先全过才写盘。它同时给出量测仪器的三条常数 ↓",
+  "ruler_cmd": "本地量测脚本报告档（不随包发布）",
+  "selftest_cmd": "本地量测脚本自证档（不随包发布）",
+  "selftest_gate": "已知答案对照（真值种进人造章）；生成必须先全过才写盘。它同时给出本量测的三条仪器常数 ↓",
   "t_stroke": 0.05,
   "target_r": 470.0,
-  "verdict_rule": "判定规则：单向 ≥25px 且 ≥0.5% 该 bin 且 |c| ≥ 0.08，组内 ≥60% 枚过线 → 该向单常数化（feed_rgb 给该向笔画色）；两向都过=dual-不可单常数化；过线枚占比>0 但两向都不到 60%=枚间不一致-不可单常数化；两向过线枚数全为 0=仪器不可见。后三类 feed_rgb=null，引擎保持现值"
+  "verdict_rule": "极性判定：单向 ≥25px 且 ≥0.5% 该 bin 且 |c| ≥ 0.08，组内 ≥60% 枚过线 → 该向单常数化（feed_rgb 给该向笔画色）；两向都过=dual-不可单常数化；过线枚占比>0 但两向都不到 60%=枚间不一致-不可单常数化；两向过线枚数全为 0=仪器不可见。后三类 feed_rgb=null，引擎保持现值。**60% 这条线一字未改**；另对「枚间不一致」的格加一条更窄的落地门槛，逐格结果记在 corner.l4bis，`verdict` 本身仍是原判（不推翻）"
  }
 }

@@ -6,8 +6,8 @@
   output/real/_manifest.json   （每张图的输入分析 + 生成参数 + 耗时）
 用法:
   python batch_test.py <照片目录或单张路径>… [--out 目录] [--quick]
-  可给多个目录/多张路径（回归基准的输入面 = `samples real_photos` = 16 张 = 335 格）；
-  **行组合 `plan_matrix` 一个字没改**，只动输入面 ⇒ 原 83 张必须逐字节不变（回归基准的要求）。
+  可给多个目录/多张路径（输入面 = `samples real_photos` = 16 张 = 335 格）；
+  **行组合 `plan_matrix` 一个字没改**，只动输入面 ⇒ 原 83 张必须逐字节不变。
 """
 import argparse
 import json
@@ -22,7 +22,7 @@ import badge_engine as be
 
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
-# 终末地支：6 品阶 × 3 家族 = 18 条（回归基准的输入面）
+# 终末地支：6 品阶 × 3 家族 = 18 条
 EF_TONES = ["ef_silver", "ef_gold", "ef_gold_pure", "ef_dark", "ef_bronze", "ef_pearl"]
 EF_FAMS = ["story", "combat", "industry"]
 
@@ -31,8 +31,11 @@ def plan_matrix(kind: str, has_alpha: bool):
     """按输入类型规划生成矩阵：(style, tone, mode, endfield_family) 列表
 
     终末地支上一版只有 `ef_silver`/`ef_gold` 两条 ⇒ 唯一动过像素的 `dark` 网格结构上
-    抓不到（覆盖面缺口）。现在 6 品阶 × 3 家族全跑，`mode` 一律钉在 `line`：
-    `silhouette`/`facet` 会把照片内容画进章面，量测 bin 会被 subject 污染。
+    抓不到（早先登记的覆盖面缺口）。现在 6 品阶 × 3 家族全跑。
+    `silhouette`/`facet` 仍不进矩阵：它们会把照片内容画进章面，量测 bin 会被 subject 污染。
+    `mode=auto` 已进网（**追加**在 `line` 18 格之后，行组合一条不改 ⇒ 旧格逐字节必须不变）：
+    该支早先在回归里零覆盖，先补**逐字节对比网**；它的**合格性**判语仍沿用先前的
+    「不过」（成品侧 `span_out` 恒 255.0 = 零判别力），二者口径不同，不许互相翻案。
     方舟/糖果支一行不改（不该动它们的像素）。
     """
     m = [("arknights", "silver", "line", None)]
@@ -44,13 +47,14 @@ def plan_matrix(kind: str, has_alpha: bool):
         m += [("arknights", "plated", "line", None)]
     if kind in ("photo", "graphic"):
         m += [("endfield", t, "line", f) for f in EF_FAMS for t in EF_TONES]
+        m += [("endfield", t, "auto", f) for f in EF_FAMS for t in EF_TONES]
     return m
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("input", nargs="+",
-                    help="一个或多个照片目录/单张路径（回归基准的输入面 = 2 个目录）")
+                    help="一个或多个照片目录/单张路径（输入面从 1 个目录扩到 2 个）")
     ap.add_argument("--out", default=None)
     ap.add_argument("--quick", action="store_true", help="每张只跑第一个组合")
     ap.add_argument("--tol-sweep", action="store_true",

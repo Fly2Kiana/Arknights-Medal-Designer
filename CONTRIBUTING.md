@@ -13,7 +13,7 @@ Thanks for helping improve Arknights Medal Designer. This is a player-made tool 
 python engine/batch_test.py samples --quick
 ```
 
-Visual QC follows the checklist in `PROMPTS.md` §三 (candy ≥ 0.85 / metal ≥ 0.85 / game-association ≥ 0.7).
+Visual QC follows the standards in [references/quality-gate.md](references/quality-gate.md).
 
 ## Conventions
 

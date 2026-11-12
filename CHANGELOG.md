@@ -1,36 +1,35 @@
 # Changelog
 
-This file records user-visible changes to Arknights Medal Designer (方舟蚀刻章设计器). The project is distributed as source code; there is no npm publication.
+用户可见变更记录。本项目以源码形式分发，无 npm 发布。
 
-## Unreleased (dev/zcode-dev-20260912 · 完整开发轮)
+## 未发布 · 2026-11
 
-- **Fully-local pipeline verified end-to-end**: local Ollama (portable, `OLLAMA_MODELS`-driven) + `qwen2.5vl:7b` produces valid emblem-design JSON through the OpenAI-compatible loopback endpoint; `engine/badge_engine.py` renders it into a medal — zero cloud round-trip.
-- **CLI optional AI matting** (`MEDAL_AI_MATTING=1`, model via `MEDAL_MATTING_MODEL`): onnxruntime + U²-Net-family model; falls back silently to classic matting. Rescues photos where classic matting fragments (verified on a cluttered-background photo). No hardcoded paths anywhere.
-- **Web tool matting model fully vendored** (`web/vendor/`, ~193MB, every chunk SHA-256-verified against the upstream manifest): local copy first, pinned CDNs only as fallback — the CDN trust surface from the 2026-09-02 audit is eliminated.
-- **SKILL v2**: SKILL.md becomes a mode router (Generate / Prompt-only / Reference Analysis / Photo Input with high-medium-low preservation levels); new `references/` set (style-system, prompt-compiler, quality-gate G1–G14, variation-engine) shared by any agent.
-- **`--list-types`** medal-type catalogue (`engine/medal_types.py`) — the style × tone × mode registry used by docs and skills.
-- **`--project` session directories**: `output/projects/<name>/roundNN…` auto-numbered rounds with per-round params/warnings/design-JSON snapshots for iterate-on-the-last-round workflows.
-- `NANO_PROMPTS.md` gained a section on feeding prompts both ways between the no-engine path and the engine path.
+- **终末地纯金章面精修**：纯金色调改用随角度连续变化的受光效果，金属高光更自然；明暗过渡改为平滑插值，消除色带分界；移除一处多余的点状装饰。
+- **网页与引擎对齐**：补齐网页工具与引擎之间的剩余模板差异，浏览器出图与命令行一致。
 
-## Unreleased (dev/zcode-handover-20260912)
+## 未发布 · 2026-10
 
-- Security & robustness fixes from the 2026-09-02 audit (see `docs/AUDIT-FINDINGS.md`):
-  - `design_emblem.py`: reject plaintext `http://` endpoints except loopback (API key/photo travel in the clear); defensive parsing of provider responses; 80 MP input guard.
-  - `emblem_render.py`: design-JSON validation (top-level type, `shapes` list, non-object entries); per-shape error isolation with stderr warnings; zero-branch laurel / zero-point star / missing banner & bezier fields no longer crash.
-  - `badge_engine.py`: explicit 80 MP decompression-bomb guard; `--mode emblem` without a design file now explains the fallback on stderr; candy style no longer runs the emblem/etch pipeline twice (same output, ~2× faster for that path); medal face fields drawn row-wise instead of per-pixel.
-  - Web tool: status messages no longer use `innerHTML`; input canvases downscale to 4096 px max; object URLs are revoked after use.
-  - CI: actions pinned by commit SHA (checkout v4.2.2, setup-python v5.6.0).
-- Docs: privacy statements (README ×2, SECURITY, SKILL) now name the two network-touching exceptions (web-tool CDN fetches; `design_emblem.py` photo upload) instead of an absolute "nothing is uploaded" claim.
+- **终末地五档色调重做**：银 / 纯金 / 镀彩金 / 深灰 / 珠光五档全部改为从参考素材直接取色，色彩与游戏内观感一致；新增 story / combat / industry 三种形制家族。
+- **方向性打光**：以定向光照取代原先的整片白色高光带，章面立体感与可读性提升。
+- **镀彩金与珠光增强**：镀彩金保留多色光谱、绿色区不再偏色；珠光呈现更丰富的虹彩流动。
+- **顶部名牌重做**：改为游戏内的牌照式名牌（圆角矩形 + 细描边 + 四角铆钉），取代早先误读的外挂吊环。
+- **色场数据驱动**：每档色调使用从参考素材采样的细密色格渲染，渐变、过渡与饱和度直接来自素材，而非手工调色。
+- **网页工具同步**：五档色调与形制家族进入网页界面，浏览器内端到端验证通过。
 
-## v1 — 2026-08-27
+## 未发布 · 2026-09
 
-- Established the public project identity: **Arknights Medal Designer** (`arknights-medal-designer`), with a bilingual README pair (English + 简体中文).
-- Restructured documentation: CHANGELOG, SECURITY, SUPPORT, CONTRIBUTING, and `requirements.txt` for reproducible installs.
-- Expanded the installation guide: environment checks, an AI-agent install prompt, numbered manual steps with a smoke test, per-entrypoint usage, and update/uninstall commands.
-- Hardened the research fetch scripts: relative paths instead of machine-specific absolute paths; expanded `.gitignore` for credentials/system files; added the MIT `LICENSE`.
-- Recorded the earlier development history: dual-style medal engine (Arknights + Endfield), AI emblem-design pipeline with visual QC, real-photo batch test rig, and the self-contained `PROMPTS.md` operator manual.
-- By design, local test outputs, downloaded study assets, and debug crops stay out of the repository; `output/` and the `reference/` download corpus regenerate locally.
-- Added GitHub issue/PR templates, a Python CI workflow (Ubuntu/Windows × Python 3.10/3.12 smoke tests), and NOTICE (research-source attribution).
-- Added `engine/design_emblem.py` — an OpenAI-compatible vision API adapter (env-configured) that produces design JSON for agent environments without built-in vision, with optional `--render` output.
-- design_emblem.py fixes from live provider testing: pre-flight ASCII validation for `OPENAI_API_KEY`, and a configurable `--max-tokens` (default 1024, GLM-4V-Flash-compatible; raise it for providers with larger limits).
-- design_emblem.py field notes from live testing (Zhipu GLM-4V-Flash / GLM-4V-Plus): free/low-cost tiers output few shapes and tend to copy the few-shot example — use them for connectivity self-checks; pick instruction-following-strong vision models (Qwen2.5-VL-72B / GPT-4o / Gemini Pro) for production designs.
+- **全本地流程打通**：本地视觉模型（Ollama 等 OpenAI 兼容端点）即可产出纹章设计稿并渲染成图，零云端往返。
+- **CLI 可选 AI 抠图**：复杂背景下主体提取更稳；不可用时自动回退经典算法。
+- **网页抠图模型入库**：浏览器内 AI 抠图模型随仓库分发并逐块校验，公共 CDN 仅作回退，消除对外部 CDN 的依赖。
+- **SKILL v2**：SKILL.md 成为模式路由（生成 / 仅提示词 / 参考分析 / 照片输入），配套 references 设计语言与质检文档，可供任意 agent 使用。
+- **章种目录**：`--list-types` 列出风格 × 色调 × 模式的完整章种注册表。
+- **会话目录**：`--project` 支持按轮次归档参数与产物，便于"在上一次基础上修改"。
+- **一句话提示词**：NANO_PROMPTS.md 提供无需引擎、面向生图模型的提示词起手文档。
+- **安全与稳健性**：拒绝明文 http 端点（回环除外）、设计稿校验、超大输入防护、网页状态消息不再使用 innerHTML、CI 动作按提交 SHA 固定。
+
+## v1 · 2026-08-27
+
+- 确立公开项目身份 **Arknights Medal Designer**，双语 README（英文 + 简体中文）。
+- 双风格蚀刻章引擎（明日方舟 + 终末地）、AI 纹章设计管线、真实照片批量测试工装、单文件网页工具。
+- 自包含操作手册 PROMPTS.md、skill 定义、issue/PR 模板、Python CI、MIT 许可与素材来源声明。
+- 本地测试输出、下载的研究素材与调试裁片默认不入库。

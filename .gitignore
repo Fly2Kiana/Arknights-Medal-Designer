@@ -32,3 +32,5 @@ reference/yt_01_conv.jpg
 reference/game8_medal_text.txt
 reference/note_medal_text.txt
 reference/prts_glorious_path.wikitext.txt
+models/*.onnx
+models/_silueta_fetch.log
