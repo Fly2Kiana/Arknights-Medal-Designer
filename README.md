@@ -180,8 +180,8 @@ See `--list-types` for the full catalogue of medal types (style × tone × mode)
 | Parameter | Range | Note |
 |---|---|---|
 | `--style` | arknights / endfield / candy | medal template |
-| `--tone` | Arknights: silver/plated/gold/stamp; Endfield: silver/gold/dark/pearl | finish tier |
-| `--endfield-family` | story / combat | Endfield shape family (story display medal / combat counter medal) |
+| `--tone` | Arknights: silver/plated/gold/stamp; Endfield: silver/gold_pure/gold_plated/dark/bronze/pearl | finish tier |
+| `--endfield-family` | story / combat / industry | Endfield shape family (story display medal / combat counter medal / industry dial medal) |
 | `--text` | ≤8 chars recommended | main inscription |
 | `--subtitle` | optional | top label |
 | `--serial` | optional | serial annotation |

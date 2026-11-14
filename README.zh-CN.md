@@ -176,8 +176,8 @@ python engine/badge_engine.py samples/sword_icon.png -o output/smoke.png --style
 | 参数 | 范围 | 说明 |
 |---|---|---|
 | `--style` | arknights / endfield / candy | 章体模板 |
-| `--tone` | 方舟 silver/plated/gold/stamp；终末地 silver/gold/dark/pearl | 品阶 |
-| `--endfield-family` | story / combat | 终末地形制家族（story 陈列金章 / combat 计数章） |
+| `--tone` | 方舟 silver/plated/gold/stamp；终末地 silver/gold_pure/gold_plated/dark/bronze/pearl | 品阶 |
+| `--endfield-family` | story / combat / industry | 终末地形制家族（story 陈列金章 / combat 计数章 / industry 表盘工业章） |
 | `--text` | ≤8 字为宜 | 主铭文 |
 | `--subtitle` | 可选 | 顶部标签 |
 | `--serial` | 可选 | 编号注释 |
