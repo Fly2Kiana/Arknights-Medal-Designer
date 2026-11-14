@@ -47,9 +47,11 @@ and signature color traits），让执行 AI 基于原设判断；同时保留 �
 | 明日方舟·晋升银章 | Arknights promotion medal: pointy-top regular hexagon (width:height ≈ 0.87), matte slate-blue metal field with fine halftone dot texture, 3–4 concentric engraved rings, silver-white etched emblem, embedded horizontal text band |
 | 明日方舟·镀层章 | 同上 + iridescent holographic film on the rim and emblem outline only |
 | 明日方舟·活动金章 | pale cream enamel field, deep bronze-gold engraved lines, a ring of small five-pointed stars inside the border |
-| 终末地·银 | Endfield anodized medal: pointy-top hexagon, cool dark-gray brushed metal, thin dark outline, top nameplate with four corner rivets, light-silver engraved emblem |
+| 终末地·银 | Endfield anodized medal: pointy-top hexagon, light silver-white brushed metal, thin dark outline, top nameplate with four corner rivets, light-silver engraved emblem |
 | 终末地·纯金 | matte amber-gold field, lighting from top-right fading to bottom-left, cream engraved emblem, corner engineering annotations |
 | 终末地·镀彩金 | gold field flowing to green and vivid orange at the sides, cream emblem, thin red accent line across the center |
+| 终末地·深灰排名章 | Endfield ranking medal: pointy-top hexagon, carbon dark-gray brushed metal field, white engraved emblem, large tier number with a #1/#2/#3 rank corner tag, diagonal divider line |
+| 终末地·铜色（深灰派生档） | same carbon dark-gray field as the ranking medal, white engraved emblem, no #N rank tag; bronze accents appear only on the industry family (capsule bar + dial disc + double triangles) |
 | 终末地·珠光镀层 | white pearlescent base with soft iridescent patches (rose left, mint top, cyan band, lavender bottom), dark-gray engraved emblem |
 | 糖果贴纸章 | candy sticker badge: die-cut white sticker border, pastel field, cream/gold/wine triple ring, stitched seam, rounded name bubble with the subject's name |
 
